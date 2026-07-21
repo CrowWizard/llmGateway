@@ -185,8 +185,16 @@ static class ResponsesCompatibility
                     return false;
                 }
 
-                var function = new JsonObject();
-                foreach (var name in new[] { "name", "description", "parameters", "strict" })
+                var toolName = GetRequiredString(tool, "name");
+                if (toolName is null)
+                {
+                    error = ("Every function tool requires a name.", "tools");
+                    target = null;
+                    return false;
+                }
+
+                var function = new JsonObject { ["name"] = toolName };
+                foreach (var name in new[] { "description", "parameters", "strict" })
                 {
                     if (tool[name] is not null)
                     {
@@ -198,12 +206,18 @@ static class ResponsesCompatibility
             target["tools"] = convertedTools;
         }
 
-        if (source["tool_choice"] is JsonObject toolChoice && toolChoice["type"]?.GetValue<string>() == "function")
+        if (source["tool_choice"] is JsonObject toolChoice)
         {
+            if (toolChoice["type"]?.GetValue<string>() != "function" || GetRequiredString(toolChoice, "name") is not { } toolName)
+            {
+                error = ("Object tool_choice must identify a function by name.", "tool_choice");
+                target = null;
+                return false;
+            }
             target["tool_choice"] = new JsonObject
             {
                 ["type"] = "function",
-                ["function"] = new JsonObject { ["name"] = toolChoice["name"]?.DeepClone() }
+                ["function"] = new JsonObject { ["name"] = toolName }
             };
         }
         else
@@ -249,15 +263,23 @@ static class ResponsesCompatibility
                     return false;
                 }
 
-                if (!TryConvertContent(item["content"], out var content))
+                if (!TryConvertContent(item["content"], role, out var content, out var contentError))
                 {
-                    error = ("Only text message content is supported.", "input");
+                    error = (contentError ?? "Unsupported message content.", "input");
                     return false;
                 }
                 messages.Add(new JsonObject { ["role"] = role, ["content"] = content });
             }
             else if (type == "function_call")
             {
+                var callId = GetRequiredString(item, "call_id") ?? GetRequiredString(item, "id");
+                var name = GetRequiredString(item, "name");
+                if (callId is null || name is null)
+                {
+                    error = ("Function calls require call_id and name.", "input");
+                    return false;
+                }
+
                 if (pendingAssistantToolMessage is null)
                 {
                     pendingAssistantToolMessage = new JsonObject
@@ -271,22 +293,28 @@ static class ResponsesCompatibility
 
                 ((JsonArray)pendingAssistantToolMessage["tool_calls"]!).Add(new JsonObject
                 {
-                    ["id"] = item["call_id"]?.DeepClone() ?? item["id"]?.DeepClone(),
+                    ["id"] = callId,
                     ["type"] = "function",
                     ["function"] = new JsonObject
                     {
-                        ["name"] = item["name"]?.DeepClone(),
-                        ["arguments"] = item["arguments"]?.DeepClone() ?? "{}"
+                        ["name"] = name,
+                        ["arguments"] = NodeToText(item["arguments"] ?? JsonValue.Create("{}"))
                     }
                 });
             }
             else if (type == "function_call_output")
             {
                 pendingAssistantToolMessage = null;
+                var callId = GetRequiredString(item, "call_id");
+                if (callId is null)
+                {
+                    error = ("Function call outputs require call_id.", "input");
+                    return false;
+                }
                 messages.Add(new JsonObject
                 {
                     ["role"] = "tool",
-                    ["tool_call_id"] = item["call_id"]?.DeepClone(),
+                    ["tool_call_id"] = callId,
                     ["content"] = NodeToText(item["output"])
                 });
             }
@@ -300,9 +328,14 @@ static class ResponsesCompatibility
         return true;
     }
 
-    private static bool TryConvertContent(JsonNode? source, out JsonNode? content)
+    private static bool TryConvertContent(
+        JsonNode? source,
+        string role,
+        out JsonNode? content,
+        out string? error)
     {
         content = null;
+        error = null;
         if (source is JsonValue value && value.TryGetValue<string>(out var text))
         {
             content = JsonValue.Create(text);
@@ -311,17 +344,67 @@ static class ResponsesCompatibility
 
         if (source is not JsonArray parts)
         {
+            error = "Message content must be a string or an array.";
             return false;
         }
 
         var converted = new JsonArray();
         foreach (var node in parts)
         {
-            if (node is not JsonObject part || part["type"]?.GetValue<string>() is not ("input_text" or "output_text" or "text"))
+            if (node is not JsonObject part)
             {
+                error = "Every message content part must be an object.";
                 return false;
             }
-            converted.Add(new JsonObject { ["type"] = "text", ["text"] = part["text"]?.DeepClone() ?? "" });
+
+            var type = part["type"]?.GetValue<string>();
+            if (type is "input_text" or "output_text" or "text")
+            {
+                converted.Add(new JsonObject { ["type"] = "text", ["text"] = part["text"]?.DeepClone() ?? "" });
+                continue;
+            }
+
+            if (type == "input_image" && role == "user")
+            {
+                var imageUrl = GetRequiredString(part, "image_url");
+                if (imageUrl is null)
+                {
+                    error = "input_image requires image_url; file_id images cannot be sent to Chat Completions.";
+                    return false;
+                }
+                var image = new JsonObject { ["url"] = imageUrl };
+                if (part["detail"] is not null)
+                {
+                    image["detail"] = part["detail"]!.DeepClone();
+                }
+                converted.Add(new JsonObject { ["type"] = "image_url", ["image_url"] = image });
+                continue;
+            }
+
+            if (type == "input_audio" && role == "user")
+            {
+                var audio = part["input_audio"] as JsonObject ?? part["audio"] as JsonObject;
+                if (audio?["data"] is null || audio["format"] is null)
+                {
+                    error = "input_audio requires data and format.";
+                    return false;
+                }
+                converted.Add(new JsonObject
+                {
+                    ["type"] = "input_audio",
+                    ["input_audio"] = new JsonObject
+                    {
+                        ["data"] = audio["data"]!.DeepClone(),
+                        ["format"] = audio["format"]!.DeepClone()
+                    }
+                });
+                continue;
+            }
+
+            error = type == "input_file"
+                ? "input_file cannot be represented by Chat Completions; convert the file to text or an image data URL first."
+                : $"Unsupported message content type: {type}";
+            return false;
         }
         content = converted;
         return true;
@@ -429,8 +512,8 @@ static class ResponsesCompatibility
 
             if (choice["message"] is JsonObject message)
             {
-                var text = message["content"]?.GetValue<string>();
-                if (text is not null)
+                var text = ExtractMessageText(message["content"]);
+                if (!string.IsNullOrEmpty(text))
                 {
                     outputText.Append(text);
                     output.Add(CreateMessageItem(responseId, text, status));
@@ -479,19 +562,20 @@ static class ResponsesCompatibility
         var sequence = 0;
         var text = new StringBuilder();
         var messageStarted = false;
-        var outputIndex = 0;
+        var messageOutputIndex = -1;
+        var nextOutputIndex = 0;
         var finishReason = "stop";
         JsonObject? usage = null;
         var tools = new Dictionary<int, StreamTool>();
 
-        JsonObject Snapshot(string status) => new()
+        JsonObject Snapshot(string status, JsonArray? output = null) => new()
         {
             ["id"] = responseId,
             ["object"] = "response",
             ["created_at"] = createdAt,
             ["status"] = status,
             ["model"] = model,
-            ["output"] = new JsonArray(),
+            ["output"] = output ?? new JsonArray(),
             ["error"] = null,
             ["incomplete_details"] = null
         };
@@ -499,8 +583,56 @@ static class ResponsesCompatibility
         await WriteEventAsync(context, "response.created", new JsonObject { ["response"] = Snapshot("in_progress") }, sequence++);
         await WriteEventAsync(context, "response.in_progress", new JsonObject { ["response"] = Snapshot("in_progress") }, sequence++);
 
+        async Task StartMessageAsync()
+        {
+            if (messageStarted)
+            {
+                return;
+            }
+            messageStarted = true;
+            messageOutputIndex = nextOutputIndex++;
+            var item = CreateMessageItem(responseId, "", "in_progress");
+            await WriteEventAsync(context, "response.output_item.added", new JsonObject { ["output_index"] = messageOutputIndex, ["item"] = item.DeepClone() }, sequence++);
+            await WriteEventAsync(context, "response.content_part.added", new JsonObject
+            {
+                ["item_id"] = item["id"]!.DeepClone(), ["output_index"] = messageOutputIndex, ["content_index"] = 0,
+                ["part"] = new JsonObject { ["type"] = "output_text", ["text"] = "", ["annotations"] = new JsonArray() }
+            }, sequence++);
+        }
+
+        async Task StartToolAsync(StreamTool state)
+        {
+            if (state.Started || state.CallId is null || state.Name is null)
+            {
+                return;
+            }
+            state.Started = true;
+            state.OutputIndex = nextOutputIndex++;
+            await WriteEventAsync(context, "response.output_item.added", new JsonObject
+            {
+                ["output_index"] = state.OutputIndex,
+                ["item"] = new JsonObject
+                {
+                    ["id"] = state.ItemId,
+                    ["type"] = "function_call",
+                    ["status"] = "in_progress",
+                    ["call_id"] = state.CallId,
+                    ["name"] = state.Name,
+                    ["arguments"] = ""
+                }
+            }, sequence++);
+            if (state.Arguments.Length > 0)
+            {
+                await WriteEventAsync(context, "response.function_call_arguments.delta", new JsonObject
+                {
+                    ["item_id"] = state.ItemId, ["output_index"] = state.OutputIndex, ["delta"] = state.Arguments.ToString()
+                }, sequence++);
+            }
+        }
+
         await using var stream = await upstreamResponse.Content.ReadAsStreamAsync(context.RequestAborted);
         using var reader = new StreamReader(stream);
+        var eventData = new StringBuilder();
         while (!context.RequestAborted.IsCancellationRequested)
         {
             var line = await reader.ReadLineAsync(context.RequestAborted);
@@ -508,12 +640,29 @@ static class ResponsesCompatibility
             {
                 break;
             }
-            if (!line.StartsWith("data:", StringComparison.Ordinal))
+            if (line.Length == 0)
+            {
+                if (eventData.Length == 0)
+                {
+                    continue;
+                }
+            }
+            else if (line.StartsWith("data:", StringComparison.Ordinal))
+            {
+                if (eventData.Length > 0)
+                {
+                    eventData.Append('\n');
+                }
+                eventData.Append(line[5..].TrimStart());
+                continue;
+            }
+            else
             {
                 continue;
             }
 
-            var data = line[5..].TrimStart();
+            var data = eventData.ToString();
+            eventData.Clear();
             if (data == "[DONE]")
             {
                 break;
@@ -545,23 +694,13 @@ static class ResponsesCompatibility
                 continue;
             }
 
-            if (delta["content"] is JsonValue contentValue && contentValue.TryGetValue<string>(out var contentDelta))
+            if (TryGetContentDelta(delta["content"], out var contentDelta) && contentDelta.Length > 0)
             {
-                if (!messageStarted)
-                {
-                    messageStarted = true;
-                    var item = CreateMessageItem(responseId, "", "in_progress");
-                    await WriteEventAsync(context, "response.output_item.added", new JsonObject { ["output_index"] = outputIndex, ["item"] = item.DeepClone() }, sequence++);
-                    await WriteEventAsync(context, "response.content_part.added", new JsonObject
-                    {
-                        ["item_id"] = item["id"]!.DeepClone(), ["output_index"] = outputIndex, ["content_index"] = 0,
-                        ["part"] = new JsonObject { ["type"] = "output_text", ["text"] = "", ["annotations"] = new JsonArray() }
-                    }, sequence++);
-                }
+                await StartMessageAsync();
                 text.Append(contentDelta);
                 await WriteEventAsync(context, "response.output_text.delta", new JsonObject
                 {
-                    ["item_id"] = $"msg_{responseId[5..]}", ["output_index"] = outputIndex, ["content_index"] = 0, ["delta"] = contentDelta
+                    ["item_id"] = $"msg_{responseId[5..]}", ["output_index"] = messageOutputIndex, ["content_index"] = 0, ["delta"] = contentDelta
                 }, sequence++);
             }
 
@@ -576,60 +715,62 @@ static class ResponsesCompatibility
                     var index = toolCall["index"]?.GetValue<int>() ?? 0;
                     if (!tools.TryGetValue(index, out var state))
                     {
-                        state = new StreamTool { OutputIndex = outputIndex + (messageStarted ? 1 : 0) + tools.Count };
+                        state = new StreamTool();
                         tools[index] = state;
                     }
                     state.CallId ??= toolCall["id"]?.GetValue<string>();
-                    if (toolCall["function"] is JsonObject function)
+                    if (toolCall["function"] is not JsonObject function)
                     {
-                        state.Name ??= function["name"]?.GetValue<string>();
-                        var argumentDelta = function["arguments"]?.GetValue<string>() ?? "";
-                        if (!state.Started && state.CallId is not null)
+                        continue;
+                    }
+                    state.Name ??= function["name"]?.GetValue<string>();
+                    await StartToolAsync(state);
+                    var argumentDelta = function["arguments"]?.GetValue<string>() ?? "";
+                    state.Arguments.Append(argumentDelta);
+                    if (state.Started && argumentDelta.Length > 0)
+                    {
+                        await WriteEventAsync(context, "response.function_call_arguments.delta", new JsonObject
                         {
-                            state.Started = true;
-                            await WriteEventAsync(context, "response.output_item.added", new JsonObject
-                            {
-                                ["output_index"] = state.OutputIndex,
-                                ["item"] = new JsonObject { ["id"] = state.ItemId, ["type"] = "function_call", ["status"] = "in_progress", ["call_id"] = state.CallId, ["name"] = state.Name ?? "", ["arguments"] = "" }
-                            }, sequence++);
-                        }
-                        state.Arguments.Append(argumentDelta);
-                        if (state.Started && argumentDelta.Length > 0)
-                        {
-                            await WriteEventAsync(context, "response.function_call_arguments.delta", new JsonObject
-                            {
-                                ["item_id"] = state.ItemId, ["output_index"] = state.OutputIndex, ["delta"] = argumentDelta
-                            }, sequence++);
-                        }
+                            ["item_id"] = state.ItemId, ["output_index"] = state.OutputIndex, ["delta"] = argumentDelta
+                        }, sequence++);
                     }
                 }
             }
         }
 
+        var completedItems = new List<(int OutputIndex, JsonObject Item)>();
         if (messageStarted)
         {
             var itemId = $"msg_{responseId[5..]}";
-            await WriteEventAsync(context, "response.output_text.done", new JsonObject { ["item_id"] = itemId, ["output_index"] = outputIndex, ["content_index"] = 0, ["text"] = text.ToString() }, sequence++);
+            await WriteEventAsync(context, "response.output_text.done", new JsonObject { ["item_id"] = itemId, ["output_index"] = messageOutputIndex, ["content_index"] = 0, ["text"] = text.ToString() }, sequence++);
             await WriteEventAsync(context, "response.content_part.done", new JsonObject
             {
-                ["item_id"] = itemId, ["output_index"] = outputIndex, ["content_index"] = 0,
+                ["item_id"] = itemId, ["output_index"] = messageOutputIndex, ["content_index"] = 0,
                 ["part"] = new JsonObject { ["type"] = "output_text", ["text"] = text.ToString(), ["annotations"] = new JsonArray() }
             }, sequence++);
-            await WriteEventAsync(context, "response.output_item.done", new JsonObject { ["output_index"] = outputIndex, ["item"] = CreateMessageItem(responseId, text.ToString(), "completed") }, sequence++);
+            var message = CreateMessageItem(responseId, text.ToString(), "completed");
+            await WriteEventAsync(context, "response.output_item.done", new JsonObject { ["output_index"] = messageOutputIndex, ["item"] = message.DeepClone() }, sequence++);
+            completedItems.Add((messageOutputIndex, message));
         }
 
-        foreach (var state in tools.Values.OrderBy(tool => tool.OutputIndex))
+        foreach (var state in tools.Values.Where(tool => tool.Started).OrderBy(tool => tool.OutputIndex))
         {
             await WriteEventAsync(context, "response.function_call_arguments.done", new JsonObject { ["item_id"] = state.ItemId, ["output_index"] = state.OutputIndex, ["arguments"] = state.Arguments.ToString() }, sequence++);
+            var item = CreateStreamFunctionItem(state, "completed");
             await WriteEventAsync(context, "response.output_item.done", new JsonObject
             {
                 ["output_index"] = state.OutputIndex,
-                ["item"] = new JsonObject { ["id"] = state.ItemId, ["type"] = "function_call", ["status"] = "completed", ["call_id"] = state.CallId, ["name"] = state.Name, ["arguments"] = state.Arguments.ToString() }
+                ["item"] = item.DeepClone()
             }, sequence++);
+            completedItems.Add((state.OutputIndex, item));
         }
 
+        var finalOutput = new JsonArray(completedItems
+            .OrderBy(entry => entry.OutputIndex)
+            .Select(entry => (JsonNode)entry.Item)
+            .ToArray());
         var finalStatus = finishReason is "length" or "content_filter" ? "incomplete" : "completed";
-        var finalResponse = Snapshot(finalStatus);
+        var finalResponse = Snapshot(finalStatus, finalOutput);
         finalResponse["output_text"] = text.ToString();
         finalResponse["usage"] = ConvertUsage(usage);
         if (finalStatus == "incomplete")
@@ -657,6 +798,40 @@ static class ResponsesCompatibility
         ["name"] = function["name"]?.DeepClone(),
         ["arguments"] = function["arguments"]?.DeepClone() ?? "{}"
     };
+
+    private static JsonObject CreateStreamFunctionItem(StreamTool state, string status) => new()
+    {
+        ["id"] = state.ItemId,
+        ["type"] = "function_call",
+        ["status"] = status,
+        ["call_id"] = state.CallId,
+        ["name"] = state.Name,
+        ["arguments"] = state.Arguments.ToString()
+    };
+
+    private static bool TryGetContentDelta(JsonNode? content, out string delta)
+    {
+        delta = ExtractMessageText(content);
+        return delta.Length > 0;
+    }
+
+    private static string ExtractMessageText(JsonNode? content)
+    {
+        if (content is JsonValue value && value.TryGetValue<string>(out var text))
+        {
+            return text;
+        }
+
+        if (content is JsonArray parts)
+        {
+            return string.Concat(parts
+                .OfType<JsonObject>()
+                .Where(part => part["type"]?.GetValue<string>() is "text" or "output_text")
+                .Select(part => part["text"]?.GetValue<string>() ?? string.Empty));
+        }
+
+        return string.Empty;
+    }
 
     private static JsonObject? ConvertUsage(JsonObject? usage)
     {
@@ -727,6 +902,15 @@ static class ResponsesCompatibility
         return node?.ToJsonString() ?? "";
     }
 
+    private static string? GetRequiredString(JsonObject source, string propertyName)
+    {
+        return source[propertyName] is JsonValue value
+            && value.TryGetValue<string>(out var result)
+            && !string.IsNullOrWhiteSpace(result)
+                ? result
+                : null;
+    }
+
     private static string CreateResponseId(string? chatId)
     {
         if (!string.IsNullOrWhiteSpace(chatId))
@@ -740,7 +924,7 @@ static class ResponsesCompatibility
     private sealed class StreamTool
     {
         public string ItemId { get; } = $"fc_{Guid.NewGuid():N}";
-        public int OutputIndex { get; init; }
+        public int OutputIndex { get; set; } = -1;
         public string? CallId { get; set; }
         public string? Name { get; set; }
         public bool Started { get; set; }

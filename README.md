@@ -103,12 +103,19 @@ dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFil
 
 客户端请求 `POST /v1/responses` 时，网关会把请求转换后发送到上游的
 `POST /v1/chat/completions`，并把上游结果转换成 Responses API 格式返回。
-非流式与流式文本、自定义函数工具、结构化输出和常用采样参数均支持。
+
+兼容层支持：
+
+- 非流式和流式文本；SSE 输出包含 Responses 生命周期、文本增量及完成事件。
+- 自定义函数工具定义、指定工具、并行工具调用、工具结果回传。
+- 流式函数参数增量，以及多个函数调用交错输出。
+- 多模态图片 URL/data URL 输入和 Chat Completions 格式的 Base64 音频输入。
+- 结构化输出、推理强度和常用采样参数。
 
 当前兼容层不支持 Responses 独有的 `previous_response_id`、`conversation`、
-`background`、内置 Web/File Search、Code Interpreter、MCP、图片/文件输入和
-`store: true`；使用这些能力时会返回明确的 `400 unsupported_parameter`。
-其他 API 路径仍由 YARP 原样转发。
+`background`、内置 Web/File Search、Code Interpreter、MCP、`input_file`、
+基于 `file_id` 的图片以及 `store: true`；使用这些能力时会返回明确的
+`400 unsupported_parameter`。其他 API 路径仍由 YARP 原样转发。
 
 ## 说明
 
