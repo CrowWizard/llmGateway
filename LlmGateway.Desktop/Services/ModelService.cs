@@ -14,9 +14,11 @@ public sealed class ModelService
         {
             throw new InvalidOperationException("请提供格式有效的令牌。");
         }
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) || baseUri.Scheme != Uri.UriSchemeHttps)
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri)
+            || (!baseUri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                && !baseUri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)))
         {
-            throw new InvalidOperationException("获取模型仅允许使用 HTTPS Base URL。");
+            throw new InvalidOperationException("Base URL 必须是有效的 HTTP 或 HTTPS 地址。");
         }
         if (!string.IsNullOrEmpty(baseUri.Query) || !string.IsNullOrEmpty(baseUri.Fragment))
         {
