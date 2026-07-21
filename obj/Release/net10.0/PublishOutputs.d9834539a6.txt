@@ -1,0 +1,9 @@
+/home/gowork/llmGateway/publish/linux-x64/LlmGateway
+/home/gowork/llmGateway/publish/linux-x64/appsettings.json
+/home/gowork/llmGateway/publish/linux-x64/publish/appsettings.json
+/home/gowork/llmGateway/publish/linux-x64/LlmGateway.dll
+/home/gowork/llmGateway/publish/linux-x64/LlmGateway.deps.json
+/home/gowork/llmGateway/publish/linux-x64/LlmGateway.runtimeconfig.json
+/home/gowork/llmGateway/publish/linux-x64/LlmGateway.pdb
+/home/gowork/llmGateway/publish/linux-x64/System.IO.Hashing.dll
+/home/gowork/llmGateway/publish/linux-x64/Yarp.ReverseProxy.dll
