@@ -108,15 +108,22 @@ dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFil
 
 - 非流式和流式文本；SSE 输出包含 Responses 生命周期、文本增量及完成事件。
 - 自定义函数工具定义、指定工具、并行工具调用、工具结果回传。
+- Web Search、File Search、Computer 和 MCP 工具声明降级为 Chat Completions 函数。
 - 流式函数参数增量，以及多个函数调用交错输出。
 - 多模态图片 URL/data URL 输入和 Chat Completions 格式的 Base64 音频输入。
 - 结构化输出、推理强度和常用采样参数。
 
-`include` 参数会被接受并忽略，因为 Chat Completions 无法返回 Responses
-专有的附加字段。当前兼容层不支持 Responses 独有的 `previous_response_id`、
-`conversation`、`background`、内置 Web/File Search、Code Interpreter、MCP、
-`input_file`、基于 `file_id` 的图片以及 `store: true`；使用这些能力时会返回
-明确的 `400 unsupported_parameter`。其他 API 路径仍由 YARP 原样转发。
+内置工具的降级函数名分别为 `web_search`、`file_search`、`computer_action` 和
+`mcp_call_<server_label>`。对应的专用 `tool_choice` 也会转换为函数选择。上游
+产生的调用会作为普通 Responses `function_call` 返回；客户端或外部工具系统执行后，
+应通过 `function_call_output` 回传结果。网关不会执行搜索、文件检索、计算机操作或
+MCP 调用，也不会生成原生 `web_search_call`、`file_search_call` 等执行事件。
+
+`include` 参数会被接受并忽略，因为 Chat Completions 无法返回 Responses 专有的
+附加字段。当前兼容层不支持 Responses 独有的 `previous_response_id`、
+`conversation`、`background`、内置工具的实际执行、`input_file`、基于 `file_id`
+的图片以及 `store: true`。无法降级的其他工具类型会被忽略，其他 API 路径仍由
+YARP 原样转发。
 
 ## 说明
 

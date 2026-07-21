@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="LlmGateway.csproj" />
   <Project Path="LlmGateway.Desktop/LlmGateway.Desktop.csproj" />
+  <Project Path="LlmGateway.Tests/LlmGateway.Tests.csproj" />
 </Solution>

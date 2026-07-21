@@ -89,7 +89,7 @@ static class ResponsesCompatibility
         }
     }
 
-    private static bool TryConvertRequest(JsonObject source, out JsonObject? target, out (string Message, string? Parameter)? error)
+    internal static bool TryConvertRequest(JsonObject source, out JsonObject? target, out (string Message, string? Parameter)? error)
     {
         target = null;
         error = null;
@@ -124,7 +124,7 @@ static class ResponsesCompatibility
         var messages = new JsonArray();
         if (source["instructions"] is JsonValue instructionsValue && instructionsValue.TryGetValue<string>(out var instructions))
         {
-            messages.Add(new JsonObject { ["role"] = "developer", ["content"] = instructions });
+            messages.Add(new JsonObject { ["role"] = "system", ["content"] = instructions });
         }
 
         if (!TryConvertInput(input, messages, out error))
@@ -173,27 +173,86 @@ static class ResponsesCompatibility
             }
         }
 
+        var convertedToolNames = new HashSet<string>(StringComparer.Ordinal);
+        var convertedToolMappings = new List<ToolMapping>();
         if (source["tools"] is JsonArray tools)
         {
             var convertedTools = new JsonArray();
             foreach (var node in tools)
             {
-                if (node is not JsonObject tool || tool["type"]?.GetValue<string>() != "function")
+                if (node is not JsonObject tool)
                 {
-                    error = ("Only function tools are supported by the compatibility endpoint.", "tools");
+                    error = ("Every tool must be an object.", "tools");
                     target = null;
                     return false;
                 }
 
-                var toolName = GetRequiredString(tool, "name");
-                if (toolName is null)
+                if (!TryConvertTool(tool, convertedToolNames, out var convertedTool, out var mapping, out var toolError))
                 {
-                    error = ("Every function tool requires a name.", "tools");
+                    error = (toolError!, "tools");
                     target = null;
                     return false;
                 }
 
-                var function = new JsonObject { ["name"] = toolName };
+                if (convertedTool is not null && mapping is not null)
+                {
+                    convertedTools.Add(convertedTool);
+                    convertedToolMappings.Add(mapping);
+                }
+            }
+            if (convertedTools.Count > 0)
+            {
+                target["tools"] = convertedTools;
+            }
+        }
+
+        if (!TryConvertToolChoice(source["tool_choice"], convertedToolNames, convertedToolMappings, out var convertedToolChoice, out var toolChoiceError))
+        {
+            error = (toolChoiceError!, "tool_choice");
+            target = null;
+            return false;
+        }
+        if (convertedToolChoice is not null)
+        {
+            target["tool_choice"] = convertedToolChoice;
+        }
+
+        return true;
+    }
+
+    private static bool TryConvertTool(
+        JsonObject tool,
+        HashSet<string> convertedToolNames,
+        out JsonObject? convertedTool,
+        out ToolMapping? mapping,
+        out string? error)
+    {
+        convertedTool = null;
+        mapping = null;
+        error = null;
+
+        var sourceType = GetRequiredString(tool, "type");
+        if (sourceType is null)
+        {
+            error = "Every tool requires a type.";
+            return false;
+        }
+
+        JsonObject function;
+        string functionName;
+        string canonicalType;
+        string? serverLabel = null;
+
+        switch (sourceType)
+        {
+            case "function":
+                functionName = GetRequiredString(tool, "name") ?? "";
+                if (functionName.Length == 0)
+                {
+                    error = "Every function tool requires a name.";
+                    return false;
+                }
+                function = new JsonObject { ["name"] = functionName };
                 foreach (var name in new[] { "description", "parameters", "strict" })
                 {
                     if (tool[name] is not null)
@@ -201,31 +260,203 @@ static class ResponsesCompatibility
                         function[name] = tool[name]!.DeepClone();
                     }
                 }
-                convertedTools.Add(new JsonObject { ["type"] = "function", ["function"] = function });
-            }
-            target["tools"] = convertedTools;
+                canonicalType = "function";
+                break;
+
+            case "web_search":
+            case "web_search_preview":
+                functionName = "web_search";
+                canonicalType = "web_search";
+                function = CreateFunctionDefinition(
+                    functionName,
+                    "Search the web for current information. The caller must execute the search and return a function_call_output.",
+                    new JsonObject
+                    {
+                        ["query"] = StringProperty("The search query.")
+                    },
+                    "query");
+                break;
+
+            case "file_search":
+                functionName = "file_search";
+                canonicalType = sourceType;
+                function = CreateFunctionDefinition(
+                    functionName,
+                    "Search the file or vector stores configured by the caller. The caller must execute the search and return a function_call_output.",
+                    new JsonObject
+                    {
+                        ["queries"] = new JsonObject
+                        {
+                            ["type"] = "array",
+                            ["items"] = new JsonObject { ["type"] = "string" },
+                            ["minItems"] = 1,
+                            ["description"] = "One or more semantic search queries."
+                        }
+                    },
+                    "queries");
+                break;
+
+            case "computer":
+            case "computer_use_preview":
+                functionName = "computer_action";
+                canonicalType = "computer";
+                function = CreateFunctionDefinition(
+                    functionName,
+                    "Request a computer interaction. The caller must validate and execute the action, then return a function_call_output.",
+                    new JsonObject
+                    {
+                        ["action"] = StringProperty("The computer action to perform."),
+                        ["arguments"] = new JsonObject
+                        {
+                            ["type"] = "object",
+                            ["description"] = "Action-specific arguments such as coordinates, text, or keys.",
+                            ["additionalProperties"] = true
+                        }
+                    },
+                    "action");
+                break;
+
+            case "mcp":
+                serverLabel = GetRequiredString(tool, "server_label");
+                if (serverLabel is null)
+                {
+                    error = "Every MCP tool requires server_label for compatibility conversion.";
+                    return false;
+                }
+                functionName = CreateMcpFunctionName(serverLabel);
+                canonicalType = sourceType;
+                function = CreateFunctionDefinition(
+                    functionName,
+                    "Request a tool call from the configured MCP server. The caller must execute it and return a function_call_output.",
+                    new JsonObject
+                    {
+                        ["tool_name"] = StringProperty("The MCP tool name."),
+                        ["arguments"] = new JsonObject
+                        {
+                            ["type"] = "object",
+                            ["description"] = "Arguments for the MCP tool.",
+                            ["additionalProperties"] = true
+                        }
+                    },
+                    "tool_name",
+                    "arguments");
+                break;
+
+            default:
+                return true;
         }
 
-        if (source["tool_choice"] is JsonObject toolChoice)
+        if (!convertedToolNames.Add(functionName))
         {
-            if (toolChoice["type"]?.GetValue<string>() != "function" || GetRequiredString(toolChoice, "name") is not { } toolName)
+            error = $"Tool conversion produced a duplicate function name: {functionName}.";
+            return false;
+        }
+
+        convertedTool = new JsonObject { ["type"] = "function", ["function"] = function };
+        mapping = new ToolMapping(canonicalType, serverLabel, functionName);
+        return true;
+    }
+
+    private static bool TryConvertToolChoice(
+        JsonNode? source,
+        HashSet<string> convertedToolNames,
+        IReadOnlyList<ToolMapping> mappings,
+        out JsonNode? converted,
+        out string? error)
+    {
+        converted = null;
+        error = null;
+        if (source is null)
+        {
+            return true;
+        }
+
+        if (source is JsonValue value && value.TryGetValue<string>(out var choice))
+        {
+            if (choice is "auto" or "none" or "required" && convertedToolNames.Count > 0)
             {
-                error = ("Object tool_choice must identify a function by name.", "tool_choice");
-                target = null;
-                return false;
+                converted = JsonValue.Create(choice);
             }
-            target["tool_choice"] = new JsonObject
-            {
-                ["type"] = "function",
-                ["function"] = new JsonObject { ["name"] = toolName }
-            };
+            return true;
+        }
+
+        if (source is not JsonObject toolChoice || GetRequiredString(toolChoice, "type") is not { } sourceType)
+        {
+            error = "tool_choice must be auto, none, required, or an object identifying a tool.";
+            return false;
+        }
+
+        ToolMapping? selected;
+        if (sourceType == "function")
+        {
+            var functionName = GetRequiredString(toolChoice, "name");
+            selected = functionName is null
+                ? null
+                : mappings.FirstOrDefault(candidate => candidate.SourceType == "function" && candidate.FunctionName == functionName);
         }
         else
         {
-            Copy(source, target, "tool_choice", "tool_choice");
+            var canonicalType = sourceType switch
+            {
+                "web_search_preview" => "web_search",
+                "computer_use_preview" => "computer",
+                _ => sourceType
+            };
+            var serverLabel = canonicalType == "mcp" ? GetRequiredString(toolChoice, "server_label") : null;
+            selected = mappings.FirstOrDefault(candidate =>
+                candidate.SourceType == canonicalType
+                && (canonicalType != "mcp" || candidate.ServerLabel == serverLabel));
         }
 
+        if (selected is null)
+        {
+            error = $"tool_choice does not identify a converted tool: {sourceType}.";
+            return false;
+        }
+
+        converted = new JsonObject
+        {
+            ["type"] = "function",
+            ["function"] = new JsonObject { ["name"] = selected.FunctionName }
+        };
         return true;
+    }
+
+    private static JsonObject CreateFunctionDefinition(
+        string name,
+        string description,
+        JsonObject properties,
+        params string[] required) => new()
+    {
+        ["name"] = name,
+        ["description"] = description,
+        ["parameters"] = new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = properties,
+            ["required"] = new JsonArray(required.Select(name => (JsonNode?)JsonValue.Create(name)).ToArray()),
+            ["additionalProperties"] = false
+        }
+    };
+
+    private static JsonObject StringProperty(string description) => new()
+    {
+        ["type"] = "string",
+        ["description"] = description
+    };
+
+    private static string CreateMcpFunctionName(string serverLabel)
+    {
+        const string prefix = "mcp_call_";
+        var sanitized = new string(serverLabel
+            .Select(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' ? character : '_')
+            .ToArray())
+            .Trim('_');
+        if (sanitized.Length == 0)
+        {
+            sanitized = "server";
+        }
+        return prefix + sanitized[..Math.Min(sanitized.Length, 64 - prefix.Length)];
     }
 
     private static bool TryConvertInput(JsonNode input, JsonArray messages, out (string Message, string? Parameter)? error)
@@ -920,6 +1151,8 @@ static class ResponsesCompatibility
         }
         return $"resp_{Guid.NewGuid():N}";
     }
+
+    private sealed record ToolMapping(string SourceType, string? ServerLabel, string FunctionName);
 
     private sealed class StreamTool
     {

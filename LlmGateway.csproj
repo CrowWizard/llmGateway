@@ -16,8 +16,10 @@
 
   <ItemGroup>
     <Compile Remove="LlmGateway.Desktop/**/*.cs" />
+    <Compile Remove="LlmGateway.Tests/**/*.cs" />
     <AvaloniaXaml Remove="LlmGateway.Desktop/**/*.axaml" />
     <None Remove="LlmGateway.Desktop/**" />
+    <None Remove="LlmGateway.Tests/**" />
   </ItemGroup>
 
   <!-- 发布时把配置文件拷到输出目录，方便改上游/UA -->
