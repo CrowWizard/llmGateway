@@ -14,6 +14,22 @@ AionUi / Snow / 其他客户端
     ->  你的模型 API
 ```
 
+## Avalonia 配置中心
+
+`LlmGateway.Desktop` 提供跨平台桌面界面，并将网关与 Codex BYOK 配置管理整合到同一应用：
+
+- 编辑、保存、启动和停止本地网关，查看脱敏运行日志。
+- 管理 `~/.codex/config.toml`，只替换目标模型和 Provider 区块，保留其他配置。
+- 保存用户 API Key、验证 `/v1/models`、选择模型，并补全 `auth.json` 安全占位 Key。
+- 自动备份 `config.toml`/`auth.json`，支持备份列表和失败回滚还原。
+- 深度检测并启动 Windows Store/MSIX、传统注册表、PATH/npm 中的 ChatGPT 和 Codex。
+- 快速打开 `.codex` 配置目录。
+
+开发运行桌面界面：`dotnet run --project LlmGateway.Desktop/LlmGateway.Desktop.csproj`。
+Windows 会把 Key 写入当前用户环境变量；Linux 会写入 `~/.codex/llm-gateway.env` 并同步到桌面进程环境。Store/MSIX 检测仅在 Windows 上启用，通过开始菜单应用清单和 AppModel 注册表定位 AUMID。
+
+`dev` 分支推送会触发 `.github/workflows/dev-windows.yml`，仅在 Windows runner 发布 `win-x64` 桌面版和网关版产物，不生成 Linux 版本。
+
 ## 环境要求
 
 - 开发/发布：**.NET 10 SDK**（https://dotnet.microsoft.com/download/dotnet/10.0）
@@ -83,8 +99,19 @@ dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFil
 - 改成：`http://127.0.0.1:3001/v1`
 - API Key 仍用原来的（原样转发 Authorization 等头）
 
+## Responses 兼容转换
+
+客户端请求 `POST /v1/responses` 时，网关会把请求转换后发送到上游的
+`POST /v1/chat/completions`，并把上游结果转换成 Responses API 格式返回。
+非流式与流式文本、自定义函数工具、结构化输出和常用采样参数均支持。
+
+当前兼容层不支持 Responses 独有的 `previous_response_id`、`conversation`、
+`background`、内置 Web/File Search、Code Interpreter、MCP、图片/文件输入和
+`store: true`；使用这些能力时会返回明确的 `400 unsupported_parameter`。
+其他 API 路径仍由 YARP 原样转发。
+
 ## 说明
 
-- 与 New-API / Optaris 同类：本机网关程序；本项目更轻，只做「补头 + 转发」。
-- 路径、Query、Body、流式（SSE）均由 YARP 透传。
+- 与 New-API / Optaris 同类：本机网关程序；除补头和转发外，提供 Responses 到 Chat Completions 的兼容转换。
+- 除 `/v1/responses` 外，路径、Query、Body、流式（SSE）均由 YARP 透传。
 - 默认不校验上游 HTTPS 证书宽松模式；生产可按需改 `HttpClient` 配置。

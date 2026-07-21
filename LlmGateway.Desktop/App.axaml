@@ -1,0 +1,49 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="LlmGateway.Desktop.App"
+             RequestedThemeVariant="Light">
+  <Application.Styles>
+    <FluentTheme />
+    <Style Selector="Window">
+      <Setter Property="FontFamily" Value="Inter, Segoe UI, Microsoft YaHei UI, sans-serif" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="#FFFFFF" />
+      <Setter Property="BorderBrush" Value="#E2E8F0" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Padding" Value="20" />
+      <Setter Property="BoxShadow" Value="0 5 16 0 #120F172A" />
+    </Style>
+    <Style Selector="TextBlock.section-title">
+      <Setter Property="FontSize" Value="18" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#0F172A" />
+    </Style>
+    <Style Selector="TextBlock.caption">
+      <Setter Property="Foreground" Value="#475569" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="TextBox,ComboBox,NumericUpDown">
+      <Setter Property="MinHeight" Value="38" />
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="#4F46E5" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="Padding" Value="18,10" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="Button.secondary">
+      <Setter Property="Background" Value="#EEF2FF" />
+      <Setter Property="Foreground" Value="#3730A3" />
+      <Setter Property="Padding" Value="16,9" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="#FEE2E2" />
+      <Setter Property="Foreground" Value="#B91C1C" />
+      <Setter Property="Padding" Value="16,9" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+  </Application.Styles>
+</Application>

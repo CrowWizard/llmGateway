@@ -18,6 +18,10 @@ var localBindIp = gateway["LocalBindIp"] ?? "127.0.0.1";
 var listenPort = gateway.GetValue("ListenPort", 3001);
 var listenUrl = $"http://{(localBindIp.Contains(':') ? $"[{localBindIp}]" : localBindIp)}:{listenPort}";
 builder.WebHost.UseUrls(listenUrl);
+builder.Services.AddHttpClient("responses-compatibility", client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(10);
+});
 
 // 额外请求头
 var extraHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -136,6 +140,18 @@ app.MapGet("/", () => Results.Json(new
 }));
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+
+app.MapPost("/v1/responses", async (HttpContext context, IHttpClientFactory httpClientFactory) =>
+{
+    await ResponsesCompatibility.HandleAsync(
+        context,
+        httpClientFactory,
+        upstreamBaseUrl,
+        userAgent,
+        overwriteUa,
+        extraHeaders,
+        logTraffic);
+});
 
 app.MapReverseProxy(proxyPipeline =>
 {

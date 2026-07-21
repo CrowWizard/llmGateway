@@ -1,0 +1,69 @@
+name: Dev Windows Build
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish-windows:
+    name: Publish Windows x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore Windows runtime
+        run: dotnet restore LlmGateway.slnx -r win-x64
+
+      - name: Publish desktop application
+        run: >-
+          dotnet publish LlmGateway.Desktop/LlmGateway.Desktop.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          --no-restore
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=None
+          -p:DebugSymbols=false
+          -o artifacts/LlmGateway-Desktop-win-x64
+
+      - name: Publish gateway service
+        run: >-
+          dotnet publish LlmGateway.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          --no-restore
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=None
+          -p:DebugSymbols=false
+          -o artifacts/LlmGateway-win-x64
+
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LlmGateway-Desktop-win-x64
+          path: artifacts/LlmGateway-Desktop-win-x64/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload gateway artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LlmGateway-win-x64
+          path: artifacts/LlmGateway-win-x64/
+          if-no-files-found: error
+          retention-days: 14

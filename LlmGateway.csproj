@@ -14,6 +14,12 @@
     <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="LlmGateway.Desktop/**/*.cs" />
+    <AvaloniaXaml Remove="LlmGateway.Desktop/**/*.axaml" />
+    <None Remove="LlmGateway.Desktop/**" />
+  </ItemGroup>
+
   <!-- 发布时把配置文件拷到输出目录，方便改上游/UA -->
   <ItemGroup>
     <Content Update="appsettings.json">
