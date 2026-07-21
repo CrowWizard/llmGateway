@@ -112,10 +112,11 @@ dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFil
 - 多模态图片 URL/data URL 输入和 Chat Completions 格式的 Base64 音频输入。
 - 结构化输出、推理强度和常用采样参数。
 
-当前兼容层不支持 Responses 独有的 `previous_response_id`、`conversation`、
-`background`、内置 Web/File Search、Code Interpreter、MCP、`input_file`、
-基于 `file_id` 的图片以及 `store: true`；使用这些能力时会返回明确的
-`400 unsupported_parameter`。其他 API 路径仍由 YARP 原样转发。
+`include` 参数会被接受并忽略，因为 Chat Completions 无法返回 Responses
+专有的附加字段。当前兼容层不支持 Responses 独有的 `previous_response_id`、
+`conversation`、`background`、内置 Web/File Search、Code Interpreter、MCP、
+`input_file`、基于 `file_id` 的图片以及 `store: true`；使用这些能力时会返回
+明确的 `400 unsupported_parameter`。其他 API 路径仍由 YARP 原样转发。
 
 ## 说明
 

@@ -7,7 +7,7 @@ static class ResponsesCompatibility
 {
     private static readonly HashSet<string> UnsupportedParameters = new(StringComparer.Ordinal)
     {
-        "background", "conversation", "context_management", "include", "previous_response_id", "prompt"
+        "background", "conversation", "context_management", "previous_response_id", "prompt"
     };
 
     public static async Task HandleAsync(
