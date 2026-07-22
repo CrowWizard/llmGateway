@@ -9,16 +9,35 @@
     </Style>
     <Style Selector="Border.card">
       <Setter Property="Background" Value="#FFFFFF" />
-      <Setter Property="BorderBrush" Value="#E2E8F0" />
+      <Setter Property="BorderBrush" Value="#DDE3E8" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="CornerRadius" Value="8" />
       <Setter Property="Padding" Value="20" />
-      <Setter Property="BoxShadow" Value="0 5 16 0 #120F172A" />
+      <Setter Property="BoxShadow" Value="0 3 12 0 #0D17202A" />
+    </Style>
+    <Style Selector="Border.subtle-panel">
+      <Setter Property="Background" Value="#F3F6F7" />
+      <Setter Property="BorderBrush" Value="#D7E0E4" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="16" />
+    </Style>
+    <Style Selector="Border.message-panel">
+      <Setter Property="Background" Value="#EDF7F5" />
+      <Setter Property="BorderBrush" Value="#B9E2DA" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="12" />
+    </Style>
+    <Style Selector="Border.status-badge">
+      <Setter Property="Background" Value="#D9F4EE" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="10,5" />
     </Style>
     <Style Selector="TextBlock.section-title">
-      <Setter Property="FontSize" Value="18" />
+      <Setter Property="FontSize" Value="17" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#0F172A" />
+      <Setter Property="Foreground" Value="#17202A" />
     </Style>
     <Style Selector="TextBlock.caption">
       <Setter Property="Foreground" Value="#475569" />
@@ -26,24 +45,29 @@
     </Style>
     <Style Selector="TextBox,ComboBox,NumericUpDown">
       <Setter Property="MinHeight" Value="38" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="CheckBox.mode-toggle">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#0F766E" />
     </Style>
     <Style Selector="Button.primary">
-      <Setter Property="Background" Value="#4F46E5" />
+      <Setter Property="Background" Value="#0F766E" />
       <Setter Property="Foreground" Value="#FFFFFF" />
       <Setter Property="Padding" Value="18,10" />
-      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="CornerRadius" Value="6" />
     </Style>
     <Style Selector="Button.secondary">
-      <Setter Property="Background" Value="#EEF2FF" />
-      <Setter Property="Foreground" Value="#3730A3" />
+      <Setter Property="Background" Value="#E8F3F1" />
+      <Setter Property="Foreground" Value="#115E59" />
       <Setter Property="Padding" Value="16,9" />
-      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="CornerRadius" Value="6" />
     </Style>
     <Style Selector="Button.danger">
-      <Setter Property="Background" Value="#FEE2E2" />
-      <Setter Property="Foreground" Value="#B91C1C" />
+      <Setter Property="Background" Value="#FDECEC" />
+      <Setter Property="Foreground" Value="#B42318" />
       <Setter Property="Padding" Value="16,9" />
-      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="CornerRadius" Value="6" />
     </Style>
   </Application.Styles>
 </Application>
