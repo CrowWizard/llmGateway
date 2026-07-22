@@ -4,15 +4,12 @@ using Yarp.ReverseProxy.Transforms;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 读取 Gateway 配置（上游 + UA 等）
+// 读取 Gateway 配置。
 var gateway = builder.Configuration.GetSection("Gateway");
 var rawUpstream = gateway["UpstreamBaseUrl"];
 var upstreamBaseUrl = string.IsNullOrWhiteSpace(rawUpstream)
     ? "https://api.openai.com/"
     : rawUpstream.TrimEnd('/') + "/";
-var userAgent = gateway["UserAgent"]
-    ?? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
-var overwriteUa = gateway.GetValue("OverwriteUserAgent", true);
 var logTraffic = gateway.GetValue("LogTraffic", true);
 var localBindIp = gateway["LocalBindIp"] ?? "127.0.0.1";
 var listenPort = gateway.GetValue("ListenPort", 3001);
@@ -71,16 +68,6 @@ builder.Services
         {
             var headers = transformContext.ProxyRequest.Headers;
 
-            if (overwriteUa)
-            {
-                headers.Remove("User-Agent");
-            }
-
-            if (!headers.Contains("User-Agent") || overwriteUa)
-            {
-                headers.TryAddWithoutValidation("User-Agent", userAgent);
-            }
-
             foreach (var (key, value) in extraHeaders)
             {
                 if (string.Equals(key, "User-Agent", StringComparison.OrdinalIgnoreCase))
@@ -131,7 +118,6 @@ app.MapGet("/", () => Results.Json(new
     status = "ok",
     listen = listenUrl,
     upstream = upstreamBaseUrl,
-    userAgent,
     usage = new
     {
         tip = $"把客户端 base_url 指到本机监听地址，例如 {listenUrl}/v1",
@@ -147,8 +133,6 @@ app.MapPost("/v1/responses", async (HttpContext context, IHttpClientFactory http
         context,
         httpClientFactory,
         upstreamBaseUrl,
-        userAgent,
-        overwriteUa,
         extraHeaders,
         logTraffic);
 });
@@ -165,7 +149,6 @@ Console.WriteLine("========================================");
 Console.WriteLine("  LlmGateway - 本机 LLM 反向代理");
 Console.WriteLine($"  监听: {listenUrl}");
 Console.WriteLine($"  上游: {upstreamBaseUrl}");
-Console.WriteLine($"  UA  : {userAgent}");
 Console.WriteLine($"  流量日志: {(logTraffic ? "开启" : "关闭")}");
 Console.WriteLine("  改配置: 同目录 appsettings.json -> 重启");
 Console.WriteLine("========================================");

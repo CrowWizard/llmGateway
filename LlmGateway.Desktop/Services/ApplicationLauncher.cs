@@ -7,37 +7,6 @@ namespace LlmGateway.Desktop.Services;
 
 public sealed class ApplicationLauncher
 {
-    public ApplicationDetection DetectCodex()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            var storeApp = DetectWindowsStoreApp("Codex");
-            if (storeApp is not null)
-            {
-                return storeApp;
-            }
-
-            var registered = FindRegisteredExecutable("Codex", "codex.exe");
-            if (registered is not null)
-            {
-                return new ApplicationDetection(true, "Codex", $"{registered}（传统注册表）", registered);
-            }
-        }
-
-        var command = FindOnPath(OperatingSystem.IsWindows() ? ["codex.exe", "codex.cmd", "codex.ps1"] : ["codex"]);
-        if (command is null && OperatingSystem.IsWindows())
-        {
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            command = new[] { "codex.cmd", "codex.ps1" }
-                .Select(name => Path.Combine(appData, "npm", name))
-                .FirstOrDefault(File.Exists);
-        }
-
-        return command is null
-            ? new ApplicationDetection(false, "Codex", "未在 Store/MSIX、注册表、PATH 或 npm 用户目录中找到 Codex", null)
-            : new ApplicationDetection(true, "Codex", command, command);
-    }
-
     public ApplicationDetection DetectChatGpt()
     {
         if (!OperatingSystem.IsWindows())
@@ -61,11 +30,6 @@ public sealed class ApplicationLauncher
         return command is null
             ? new ApplicationDetection(false, "ChatGPT", "未在 Store/MSIX、注册表或 PATH 中找到 ChatGPT", null)
             : new ApplicationDetection(true, "ChatGPT", command, command);
-    }
-
-    public void LaunchCodex(string workingDirectory)
-    {
-        Launch(DetectCodex(), workingDirectory);
     }
 
     public void LaunchChatGpt(string workingDirectory)

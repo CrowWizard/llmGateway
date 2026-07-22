@@ -88,8 +88,6 @@ public sealed class GatewayHostService
                     context,
                     httpClientFactory,
                     upstreamBaseUrl,
-                    effective.UserAgent,
-                    effective.OverwriteUserAgent,
                     effective.ExtraRequestHeaders,
                     effective.LogTraffic);
             });
@@ -159,11 +157,6 @@ public sealed class GatewayHostService
 
     private static void ApplyHeaders(HttpRequestMessage request, GatewaySettings settings)
     {
-        if (settings.OverwriteUserAgent || !request.Headers.Contains("User-Agent"))
-        {
-            request.Headers.Remove("User-Agent");
-            request.Headers.TryAddWithoutValidation("User-Agent", settings.UserAgent);
-        }
         foreach (var (name, value) in settings.ExtraRequestHeaders)
         {
             if (name.Equals("User-Agent", StringComparison.OrdinalIgnoreCase))

@@ -14,8 +14,6 @@ static class ResponsesCompatibility
         HttpContext context,
         IHttpClientFactory httpClientFactory,
         string upstreamBaseUrl,
-        string userAgent,
-        bool overwriteUserAgent,
         IReadOnlyDictionary<string, string> extraHeaders,
         bool logTraffic)
     {
@@ -42,8 +40,6 @@ static class ResponsesCompatibility
             context,
             chatRequest!,
             upstreamBaseUrl,
-            userAgent,
-            overwriteUserAgent,
             extraHeaders);
 
         if (logTraffic)
@@ -663,8 +659,6 @@ static class ResponsesCompatibility
         HttpContext context,
         JsonObject body,
         string upstreamBaseUrl,
-        string userAgent,
-        bool overwriteUserAgent,
         IReadOnlyDictionary<string, string> extraHeaders)
     {
         var uri = $"{upstreamBaseUrl.TrimEnd('/')}/v1/chat/completions";
@@ -685,11 +679,6 @@ static class ResponsesCompatibility
             request.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray());
         }
 
-        if (overwriteUserAgent || !request.Headers.Contains("User-Agent"))
-        {
-            request.Headers.Remove("User-Agent");
-            request.Headers.TryAddWithoutValidation("User-Agent", userAgent);
-        }
         foreach (var (name, value) in extraHeaders)
         {
             if (name.Equals("User-Agent", StringComparison.OrdinalIgnoreCase))

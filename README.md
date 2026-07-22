@@ -4,13 +4,12 @@
 
 ## 解决什么问题
 
-部分模型 API 会校验 / 要求 `User-Agent`。客户端不带 UA 时请求失败。  
-本程序在本机监听端口，转发到真实上游，并**自动写入 User-Agent 等请求头**，支持流式响应。
+本程序在本机监听端口，将 OpenAI `/v1/responses` 请求转换为上游 `/v1/chat/completions`，并把 JSON 或 SSE 流式响应转换回 Responses 格式。其他 API 路径由 YARP 原样代理。
 
 ```
-AionUi / Snow / 其他客户端
-    ->  http://127.0.0.1:3001
-    ->  LlmGateway（补 UA + 转发）
+Codex / 其他客户端
+    ->  http://127.0.0.1:3001/v1
+    ->  LlmGateway（Responses 兼容转换 + 转发）
     ->  你的模型 API
 ```
 
@@ -18,11 +17,12 @@ AionUi / Snow / 其他客户端
 
 `LlmGateway.Desktop` 提供跨平台桌面界面，并将网关与 Codex BYOK 配置管理整合到同一应用：
 
-- 编辑、保存、启动和停止本地网关，查看脱敏运行日志。
+- 在同一配置页编辑并保存网关和 Codex BYOK 参数，启动或停止本地网关并查看脱敏运行日志。
+- 兼容模式自动将 Codex Base URL 设置为 `http://127.0.0.1:[监听端口]/v1`；关闭后可配置直连地址。
 - 管理 `~/.codex/config.toml`，只替换目标模型和 Provider 区块，保留其他配置。
 - 保存用户 API Key、验证 `/v1/models`、选择模型，并补全 `auth.json` 安全占位 Key。
 - 自动备份 `config.toml`/`auth.json`，支持备份列表和失败回滚还原。
-- 深度检测并启动 Windows Store/MSIX、传统注册表、PATH/npm 中的 ChatGPT 和 Codex。
+- 检测并启动 Windows Store/MSIX、传统注册表或 PATH 中的 ChatGPT。
 - 快速打开 `.codex` 配置目录。
 
 开发运行桌面界面：`dotnet run --project LlmGateway.Desktop/LlmGateway.Desktop.csproj`。
@@ -47,11 +47,11 @@ Windows 会把 Key 写入当前用户环境变量；Linux 会写入 `~/.codex/ll
     "LocalBindIp": "127.0.0.1",
     "ListenPort": 3001,
     "UpstreamBaseUrl": "https://你的模型API根地址",
-    "UserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "CompatibilityMode": true,
+    "DirectCodexBaseUrl": "https://你的模型API根地址/v1",
     "ExtraRequestHeaders": {
       "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8"
     },
-    "OverwriteUserAgent": true,
     "LogTraffic": true
   }
 }
@@ -61,10 +61,10 @@ Windows 会把 Key 写入当前用户环境变量；Linux 会写入 `~/.codex/ll
 |--------|------|
 | `Gateway.LocalBindIp` | 本地绑定 IP；允许局域网访问可设为 `0.0.0.0` |
 | `Gateway.ListenPort` | 本地监听端口 |
-| `Gateway.UpstreamBaseUrl` | 上游模型 API 根地址 |
-| `Gateway.UserAgent` | 写入的 UA |
-| `Gateway.ExtraRequestHeaders` | 额外请求头 |
-| `Gateway.OverwriteUserAgent` | 是否强制覆盖客户端 UA |
+| `Gateway.UpstreamBaseUrl` | 网关转发到的上游模型 API 根地址 |
+| `Gateway.CompatibilityMode` | 是否让 Codex 自动连接本地网关 |
+| `Gateway.DirectCodexBaseUrl` | 关闭兼容模式时使用的 Codex 直连地址 |
+| `Gateway.ExtraRequestHeaders` | 额外请求头；`User-Agent` 不会由配置主动写入 |
 | `Gateway.LogTraffic` | 是否记录客户端与上游的请求头、请求体、响应头和响应体 |
 
 改配置后**重启 exe** 生效。流量日志可能包含 API Key 和对话内容，只应在受信任环境开启。

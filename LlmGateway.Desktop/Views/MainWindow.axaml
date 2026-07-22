@@ -24,142 +24,127 @@
       </Grid>
     </Border>
 
-    <TabControl Grid.Row="1" Margin="22">
-      <TabItem Header="网关管理">
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-          <StackPanel Margin="4,18,4,24" Spacing="16">
-            <Border Classes="card">
-              <StackPanel Spacing="16">
-                <Grid ColumnDefinitions="*,Auto">
-                  <StackPanel>
-                    <TextBlock Classes="section-title" Text="本地网关" />
-                    <TextBlock Classes="caption" Margin="0,5,0,0" Text="启动后，客户端可通过本机地址访问上游模型服务。" />
-                  </StackPanel>
-                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
-                    <Button Classes="primary" Command="{Binding StartGatewayCommand}" Content="启动网关" />
-                    <Button Classes="danger" Command="{Binding StopGatewayCommand}" Content="停止网关" />
-                  </StackPanel>
-                </Grid>
-                <Grid ColumnDefinitions="*,*,2*" ColumnSpacing="14">
-                  <StackPanel Spacing="6">
-                    <TextBlock Classes="caption" Text="监听 IP" />
-                    <TextBox Text="{Binding LocalBindIp}" PlaceholderText="127.0.0.1" />
-                  </StackPanel>
-                  <StackPanel Grid.Column="1" Spacing="6">
-                    <TextBlock Classes="caption" Text="监听端口" />
-                    <NumericUpDown Value="{Binding ListenPort}" Minimum="1" Maximum="65535" FormatString="0" />
-                  </StackPanel>
-                  <StackPanel Grid.Column="2" Spacing="6">
-                    <TextBlock Classes="caption" Text="上游 Base URL" />
-                    <TextBox Text="{Binding UpstreamBaseUrl}" PlaceholderText="https://api.example.com" />
-                  </StackPanel>
-                </Grid>
-                <StackPanel Spacing="6">
-                  <TextBlock Classes="caption" Text="User-Agent" />
-                  <TextBox Text="{Binding UserAgent}" />
-                </StackPanel>
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                  <StackPanel Orientation="Horizontal" Spacing="22" VerticalAlignment="Center">
-                    <CheckBox IsChecked="{Binding OverwriteUserAgent}" Content="强制覆盖客户端 User-Agent" />
-                    <CheckBox IsChecked="{Binding LogTraffic}" Content="记录脱敏流量日志" />
-                  </StackPanel>
-                  <Button Grid.Column="1" Classes="secondary" Command="{Binding SaveGatewayCommand}" Content="保存配置" />
-                </Grid>
-                <Border Background="#EEF2FF" CornerRadius="8" Padding="12">
-                  <TextBlock Text="{Binding GatewayStatus}" Foreground="#3730A3" TextWrapping="Wrap" />
-                </Border>
+    <ScrollViewer Grid.Row="1" Margin="22" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Margin="4,0,4,24" Spacing="16">
+        <Border Classes="card">
+          <StackPanel Spacing="16">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel>
+                <TextBlock Classes="section-title" Text="网关与 Codex 配置" />
+                <TextBlock Classes="caption" Margin="0,5,0,0" Text="统一保存本地网关和 Codex BYOK 连接参数。" />
               </StackPanel>
-            </Border>
-
-            <Border Classes="card">
-              <Grid RowDefinitions="Auto,*" MinHeight="250">
-                <Grid ColumnDefinitions="*,Auto">
-                  <StackPanel>
-                    <TextBlock Classes="section-title" Text="运行日志" />
-                    <TextBlock Classes="caption" Margin="0,5,0,0" Text="Authorization、Cookie 与常见 API Key 请求头会自动脱敏。" />
-                  </StackPanel>
-                  <Button Grid.Column="1" Classes="secondary" Command="{Binding ClearLogsCommand}" Content="清空" />
-                </Grid>
-                <ListBox Grid.Row="1" Margin="0,14,0,0" ItemsSource="{Binding GatewayLogs}" Background="#0F172A" Foreground="#CBD5E1" Padding="10" FontFamily="Cascadia Mono, monospace" FontSize="12">
-                  <ListBox.ItemTemplate>
-                    <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" /></DataTemplate>
-                  </ListBox.ItemTemplate>
-                </ListBox>
-              </Grid>
-            </Border>
-          </StackPanel>
-        </ScrollViewer>
-      </TabItem>
-
-      <TabItem Header="Codex 配置">
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-          <StackPanel Margin="4,18,4,24" Spacing="16">
-            <Border Classes="card">
-              <StackPanel Spacing="15">
-                <TextBlock Classes="section-title" Text="连接配置" />
-                <Grid ColumnDefinitions="2*,Auto" ColumnSpacing="10">
-                  <StackPanel Spacing="6">
-                    <TextBlock Classes="caption" Text="API Key" />
-                    <TextBox x:Name="ApiKeyBox" Text="{Binding ApiKey}" PasswordChar="●" RevealPassword="{Binding IsApiKeyVisible}" PlaceholderText="输入 BYOK 令牌" />
-                  </StackPanel>
-                  <Button Grid.Column="1" VerticalAlignment="Bottom" Classes="secondary" Command="{Binding ToggleApiKeyCommand}" Content="显示 / 隐藏" />
-                </Grid>
-                <Grid ColumnDefinitions="2*,Auto" ColumnSpacing="10">
-                  <StackPanel Spacing="6">
-                    <TextBlock Classes="caption" Text="模型" />
-                    <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding Model}" IsEditable="True" />
-                  </StackPanel>
-                  <Button Grid.Column="1" VerticalAlignment="Bottom" Classes="secondary" Command="{Binding FetchModelsCommand}" Content="验证并获取模型" />
-                </Grid>
-                <Grid ColumnDefinitions="*,2*" ColumnSpacing="14">
-                  <StackPanel Spacing="6">
-                    <TextBlock Classes="caption" Text="Provider" />
-                    <TextBox Text="{Binding Provider}" />
-                  </StackPanel>
-                  <StackPanel Grid.Column="1" Spacing="6">
-                    <TextBlock Classes="caption" Text="Codex Base URL" />
-                    <TextBox Text="{Binding CodexBaseUrl}" />
-                  </StackPanel>
-                </Grid>
-                <StackPanel Spacing="6">
-                  <TextBlock Classes="caption" Text="API Key 环境变量" />
-                  <TextBox Text="{Binding EnvironmentKey}" />
-                </StackPanel>
-                <Border Background="#F8FAFC" CornerRadius="8" Padding="12">
-                  <TextBlock Text="{Binding ApplicationStatus}" Foreground="#475569" TextWrapping="Wrap" />
-                </Border>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                <Button Classes="primary" Command="{Binding StartGatewayCommand}" Content="启动网关" />
+                <Button Classes="danger" Command="{Binding StopGatewayCommand}" Content="停止网关" />
               </StackPanel>
-            </Border>
+            </Grid>
 
-            <Border Classes="card">
-              <StackPanel Spacing="14">
-                <TextBlock Classes="section-title" Text="备份与还原" />
-                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                  <ComboBox ItemsSource="{Binding Backups}" SelectedItem="{Binding SelectedBackup}" DisplayMemberBinding="{Binding Label}" PlaceholderText="暂无备份" />
-                  <Button Grid.Column="1" Classes="secondary" Command="{Binding RefreshBackupsCommand}" Content="刷新列表" />
-                  <Button Grid.Column="2" Classes="danger" Command="{Binding RestoreBackupCommand}" Content="还原所选" />
-                </Grid>
-                <TextBlock Classes="caption" Text="{Binding CodexDirectory, StringFormat='备份位置：{0}/bak'}" />
+            <Grid ColumnDefinitions="*,*,2*" ColumnSpacing="14">
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="监听 IP" />
+                <TextBox Text="{Binding LocalBindIp}" PlaceholderText="127.0.0.1" />
               </StackPanel>
-            </Border>
+              <StackPanel Grid.Column="1" Spacing="6">
+                <TextBlock Classes="caption" Text="监听端口" />
+                <NumericUpDown Value="{Binding ListenPort}" Minimum="1" Maximum="65535" FormatString="0" />
+              </StackPanel>
+              <StackPanel Grid.Column="2" Spacing="6">
+                <TextBlock Classes="caption" Text="上游 Base URL" />
+                <TextBox Text="{Binding UpstreamBaseUrl}" PlaceholderText="https://api.example.com" />
+              </StackPanel>
+            </Grid>
 
-            <Border Classes="card">
-              <StackPanel Spacing="15">
-                <TextBlock Classes="section-title" Text="操作" />
-                <Border Background="#EEF2FF" CornerRadius="8" Padding="12">
-                  <TextBlock Text="{Binding CodexStatus}" Foreground="#3730A3" TextWrapping="Wrap" />
-                </Border>
-                <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
-                  <Button Classes="primary" Command="{Binding SaveCodexCommand}" Content="保存 Codex 配置" />
-                  <Button Grid.Column="1" Classes="secondary" Command="{Binding LaunchCodexCommand}" Content="启动 Codex" />
-                  <Button Grid.Column="2" Classes="secondary" Command="{Binding LaunchChatGptCommand}" Content="启动 ChatGPT" />
-                  <Button Grid.Column="3" Classes="secondary" Command="{Binding OpenCodexDirectoryCommand}" Content="打开配置目录" />
-                </Grid>
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+              <CheckBox IsChecked="{Binding CompatibilityMode}" Content="兼容模式" VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" Spacing="6">
+                <TextBlock Classes="caption" Text="Codex Base URL" />
+                <TextBox IsVisible="{Binding CompatibilityMode}" Text="{Binding EffectiveCodexBaseUrl}" IsReadOnly="True" />
+                <TextBox IsVisible="{Binding IsDirectCodexMode}" Text="{Binding CodexBaseUrl}" PlaceholderText="https://api.example.com/v1" />
+              </StackPanel>
+            </Grid>
+
+            <Grid ColumnDefinitions="2*,Auto" ColumnSpacing="10">
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="API Key" />
+                <TextBox x:Name="ApiKeyBox" Text="{Binding ApiKey}" PasswordChar="●" RevealPassword="{Binding IsApiKeyVisible}" PlaceholderText="输入 BYOK 令牌" />
+              </StackPanel>
+              <Button Grid.Column="1" VerticalAlignment="Bottom" Classes="secondary" Command="{Binding ToggleApiKeyCommand}" Content="显示 / 隐藏" />
+            </Grid>
+
+            <Grid ColumnDefinitions="2*,Auto" ColumnSpacing="10">
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="模型" />
+                <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding Model}" IsEditable="True" />
+              </StackPanel>
+              <Button Grid.Column="1" VerticalAlignment="Bottom" Classes="secondary" Command="{Binding FetchModelsCommand}" Content="验证并获取模型" />
+            </Grid>
+
+            <Grid ColumnDefinitions="*,2*" ColumnSpacing="14">
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="Provider" />
+                <TextBox Text="{Binding Provider}" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Spacing="6">
+                <TextBlock Classes="caption" Text="API Key 环境变量" />
+                <TextBox Text="{Binding EnvironmentKey}" />
+              </StackPanel>
+            </Grid>
+
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+              <CheckBox IsChecked="{Binding LogTraffic}" Content="记录脱敏流量日志" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="primary" Command="{Binding SaveConfigurationCommand}" Content="保存全部配置" />
+            </Grid>
+            <Border Background="#EEF2FF" CornerRadius="8" Padding="12">
+              <StackPanel Spacing="5">
+                <TextBlock Text="{Binding GatewayStatus}" Foreground="#3730A3" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding CodexStatus}" Foreground="#3730A3" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
           </StackPanel>
-        </ScrollViewer>
-      </TabItem>
-    </TabControl>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <TextBlock Classes="section-title" Text="备份与还原" />
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+              <ComboBox ItemsSource="{Binding Backups}" SelectedItem="{Binding SelectedBackup}" DisplayMemberBinding="{Binding Label}" PlaceholderText="暂无备份" />
+              <Button Grid.Column="1" Classes="secondary" Command="{Binding RefreshBackupsCommand}" Content="刷新列表" />
+              <Button Grid.Column="2" Classes="danger" Command="{Binding RestoreBackupCommand}" Content="还原所选" />
+            </Grid>
+            <TextBlock Classes="caption" Text="{Binding CodexDirectory, StringFormat='备份位置：{0}/bak'}" />
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <Grid RowDefinitions="Auto,*" MinHeight="250">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel>
+                <TextBlock Classes="section-title" Text="运行日志" />
+                <TextBlock Classes="caption" Margin="0,5,0,0" Text="Authorization、Cookie 与常见 API Key 请求头会自动脱敏。" />
+              </StackPanel>
+              <Button Grid.Column="1" Classes="secondary" Command="{Binding ClearLogsCommand}" Content="清空" />
+            </Grid>
+            <ListBox Grid.Row="1" Margin="0,14,0,0" ItemsSource="{Binding GatewayLogs}" Background="#0F172A" Foreground="#CBD5E1" Padding="10" FontFamily="Cascadia Mono, monospace" FontSize="12">
+              <ListBox.ItemTemplate>
+                <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" /></DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Grid>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <TextBlock Classes="section-title" Text="ChatGPT" />
+            <Border Background="#F8FAFC" CornerRadius="8" Padding="12">
+              <TextBlock Text="{Binding ApplicationStatus}" Foreground="#475569" TextWrapping="Wrap" />
+            </Border>
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+              <Button Classes="primary" Command="{Binding LaunchChatGptCommand}" Content="启动 ChatGPT" />
+              <Button Grid.Column="1" Classes="secondary" Command="{Binding OpenCodexDirectoryCommand}" Content="打开配置目录" />
+            </Grid>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
   </Grid>
 </Window>

@@ -23,8 +23,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _localBindIp = "127.0.0.1";
     private int _listenPort = 23001;
     private string _upstreamBaseUrl = string.Empty;
-    private string _userAgent = string.Empty;
-    private bool _overwriteUserAgent;
+    private bool _compatibilityMode = true;
     private bool _logTraffic;
     private bool _isGatewayRunning;
     private string _apiKey = string.Empty;
@@ -63,12 +62,10 @@ public sealed class MainWindowViewModel : ObservableObject
         _stopGatewayCommand = new AsyncCommand(StopGatewayAsync, () => IsGatewayRunning);
         StartGatewayCommand = _startGatewayCommand;
         StopGatewayCommand = _stopGatewayCommand;
-        SaveGatewayCommand = new AsyncCommand(SaveGatewayAsync);
+        SaveConfigurationCommand = new AsyncCommand(SaveConfigurationAsync);
         FetchModelsCommand = new AsyncCommand(FetchModelsAsync);
-        SaveCodexCommand = new AsyncCommand(SaveCodexAsync);
         RestoreBackupCommand = new AsyncCommand(RestoreBackupAsync);
         RefreshBackupsCommand = new AsyncCommand(RefreshBackupsAsync);
-        LaunchCodexCommand = new AsyncCommand(LaunchCodexAsync);
         LaunchChatGptCommand = new AsyncCommand(LaunchChatGptAsync);
         OpenCodexDirectoryCommand = new AsyncCommand(OpenCodexDirectoryAsync);
         ToggleApiKeyCommand = new AsyncCommand(() =>
@@ -100,22 +97,44 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public AsyncCommand StartGatewayCommand { get; }
     public AsyncCommand StopGatewayCommand { get; }
-    public AsyncCommand SaveGatewayCommand { get; }
+    public AsyncCommand SaveConfigurationCommand { get; }
     public AsyncCommand FetchModelsCommand { get; }
-    public AsyncCommand SaveCodexCommand { get; }
     public AsyncCommand RestoreBackupCommand { get; }
     public AsyncCommand RefreshBackupsCommand { get; }
-    public AsyncCommand LaunchCodexCommand { get; }
     public AsyncCommand LaunchChatGptCommand { get; }
     public AsyncCommand OpenCodexDirectoryCommand { get; }
     public AsyncCommand ToggleApiKeyCommand { get; }
     public AsyncCommand ClearLogsCommand { get; }
 
     public string LocalBindIp { get => _localBindIp; set => SetProperty(ref _localBindIp, value); }
-    public int ListenPort { get => _listenPort; set => SetProperty(ref _listenPort, value); }
+    public int ListenPort
+    {
+        get => _listenPort;
+        set
+        {
+            if (SetProperty(ref _listenPort, value))
+            {
+                OnPropertyChanged(nameof(EffectiveCodexBaseUrl));
+            }
+        }
+    }
     public string UpstreamBaseUrl { get => _upstreamBaseUrl; set => SetProperty(ref _upstreamBaseUrl, value); }
-    public string UserAgent { get => _userAgent; set => SetProperty(ref _userAgent, value); }
-    public bool OverwriteUserAgent { get => _overwriteUserAgent; set => SetProperty(ref _overwriteUserAgent, value); }
+    public bool CompatibilityMode
+    {
+        get => _compatibilityMode;
+        set
+        {
+            if (SetProperty(ref _compatibilityMode, value))
+            {
+                OnPropertyChanged(nameof(IsDirectCodexMode));
+                OnPropertyChanged(nameof(EffectiveCodexBaseUrl));
+            }
+        }
+    }
+    public bool IsDirectCodexMode => !CompatibilityMode;
+    public string EffectiveCodexBaseUrl => CompatibilityMode
+        ? $"http://127.0.0.1:{ListenPort}/v1"
+        : CodexBaseUrl;
     public bool LogTraffic { get => _logTraffic; set => SetProperty(ref _logTraffic, value); }
     public bool IsGatewayRunning
     {
@@ -134,7 +153,17 @@ public sealed class MainWindowViewModel : ObservableObject
     public string ApiKey { get => _apiKey; set => SetProperty(ref _apiKey, value); }
     public string Model { get => _model; set => SetProperty(ref _model, value); }
     public string Provider { get => _provider; set => SetProperty(ref _provider, value); }
-    public string CodexBaseUrl { get => _codexBaseUrl; set => SetProperty(ref _codexBaseUrl, value); }
+    public string CodexBaseUrl
+    {
+        get => _codexBaseUrl;
+        set
+        {
+            if (SetProperty(ref _codexBaseUrl, value))
+            {
+                OnPropertyChanged(nameof(EffectiveCodexBaseUrl));
+            }
+        }
+    }
     public string EnvironmentKey { get => _environmentKey; set => SetProperty(ref _environmentKey, value); }
     public BackupItem? SelectedBackup
     {
@@ -151,8 +180,8 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         try
         {
-            ApplyGateway(_gatewaySettingsService.Load());
             ApplyCodex(_codexConfig.Load());
+            ApplyGateway(_gatewaySettingsService.Load());
             ApiKey = _environmentService.Read(EnvironmentKey);
             RefreshBackups();
             RefreshApplicationStatus();
@@ -164,16 +193,30 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    private async Task SaveGatewayAsync()
+    private async Task SaveConfigurationAsync()
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(ApiKey))
+            {
+                throw new InvalidOperationException("令牌不能为空。");
+            }
+
+            var backup = (File.Exists(_paths.CodexConfigPath) || File.Exists(_paths.CodexAuthPath))
+                ? _backupService.Create().DisplayName
+                : "首次配置，无旧文件";
             await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
-            GatewayStatus = "网关配置已保存；运行中的网关需重启后应用。";
+            await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
+            await _codexConfig.SaveAsync(CurrentCodexSettings());
+            var authResult = await _codexAuth.EnsureAsync();
+            RefreshBackups();
+            GatewayStatus = "全部配置已保存；运行中的网关需重启后应用。";
+            CodexStatus = $"Codex 配置已保存；自动备份：{backup}{(authResult.PlaceholderCreated ? "；已创建 auth.json 安全占位 Key" : string.Empty)}。";
         }
         catch (Exception exception)
         {
             GatewayStatus = $"保存失败：{exception.Message}";
+            CodexStatus = GatewayStatus;
         }
     }
 
@@ -211,7 +254,7 @@ public sealed class MainWindowViewModel : ObservableObject
         try
         {
             CodexStatus = "正在验证令牌并获取模型…";
-            var models = await _modelService.FetchAsync(CodexBaseUrl, ApiKey);
+            var models = await _modelService.FetchAsync(EffectiveCodexBaseUrl, ApiKey);
             var previous = Model;
             Models.Clear();
             foreach (var item in models)
@@ -224,30 +267,6 @@ public sealed class MainWindowViewModel : ObservableObject
         catch (Exception exception)
         {
             CodexStatus = $"获取模型失败：{exception.Message}";
-        }
-    }
-
-    private async Task SaveCodexAsync()
-    {
-        try
-        {
-            if (string.IsNullOrWhiteSpace(ApiKey))
-            {
-                throw new InvalidOperationException("令牌不能为空。");
-            }
-
-            var backup = (File.Exists(_paths.CodexConfigPath) || File.Exists(_paths.CodexAuthPath))
-                ? _backupService.Create().DisplayName
-                : "首次配置，无旧文件";
-            await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
-            await _codexConfig.SaveAsync(CurrentCodexSettings());
-            var authResult = await _codexAuth.EnsureAsync();
-            RefreshBackups();
-            CodexStatus = $"配置已保存；自动备份：{backup}{(authResult.PlaceholderCreated ? "；已创建 auth.json 安全占位 Key" : string.Empty)}。";
-        }
-        catch (Exception exception)
-        {
-            CodexStatus = $"保存失败：{exception.Message}";
         }
     }
 
@@ -291,20 +310,6 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    private Task LaunchCodexAsync()
-    {
-        try
-        {
-            _launcher.LaunchCodex(_paths.UserHome);
-            CodexStatus = "已发送 Codex 启动请求。";
-        }
-        catch (Exception exception)
-        {
-            CodexStatus = $"启动失败：{exception.Message}";
-        }
-        return Task.CompletedTask;
-    }
-
     private Task LaunchChatGptAsync()
     {
         try
@@ -346,8 +351,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private void RefreshApplicationStatus()
     {
         var chatGpt = _launcher.DetectChatGpt();
-        var codex = _launcher.DetectCodex();
-        ApplicationStatus = $"ChatGPT：{chatGpt.Description}  |  Codex：{codex.Description}";
+        ApplicationStatus = $"ChatGPT：{chatGpt.Description}";
     }
 
     private GatewaySettings CurrentGatewaySettings() => new()
@@ -355,8 +359,8 @@ public sealed class MainWindowViewModel : ObservableObject
         LocalBindIp = LocalBindIp,
         ListenPort = ListenPort,
         UpstreamBaseUrl = UpstreamBaseUrl,
-        UserAgent = UserAgent,
-        OverwriteUserAgent = OverwriteUserAgent,
+        CompatibilityMode = CompatibilityMode,
+        DirectCodexBaseUrl = CodexBaseUrl,
         LogTraffic = LogTraffic,
         ExtraRequestHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -368,7 +372,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         Model = Model,
         Provider = Provider,
-        BaseUrl = CodexBaseUrl,
+        BaseUrl = EffectiveCodexBaseUrl,
         EnvironmentKey = EnvironmentKey
     };
 
@@ -377,8 +381,11 @@ public sealed class MainWindowViewModel : ObservableObject
         LocalBindIp = settings.LocalBindIp;
         ListenPort = settings.ListenPort;
         UpstreamBaseUrl = settings.UpstreamBaseUrl;
-        UserAgent = settings.UserAgent;
-        OverwriteUserAgent = settings.OverwriteUserAgent;
+        CompatibilityMode = settings.CompatibilityMode;
+        if (!string.IsNullOrWhiteSpace(settings.DirectCodexBaseUrl))
+        {
+            CodexBaseUrl = settings.DirectCodexBaseUrl;
+        }
         LogTraffic = settings.LogTraffic;
     }
 

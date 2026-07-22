@@ -5,12 +5,12 @@ public sealed class GatewaySettings
     public string LocalBindIp { get; set; } = "127.0.0.1";
     public int ListenPort { get; set; } = 23001;
     public string UpstreamBaseUrl { get; set; } = "https://image.lingjue.chat";
-    public string UserAgent { get; set; } = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+    public bool CompatibilityMode { get; set; } = true;
+    public string DirectCodexBaseUrl { get; set; } = "https://image.lingjue.chat/v1";
     public Dictionary<string, string> ExtraRequestHeaders { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Accept-Language"] = "zh-CN,zh;q=0.9,en;q=0.8"
     };
-    public bool OverwriteUserAgent { get; set; } = true;
     public bool LogTraffic { get; set; }
 
     public GatewaySettings Clone() => new()
@@ -18,9 +18,9 @@ public sealed class GatewaySettings
         LocalBindIp = LocalBindIp,
         ListenPort = ListenPort,
         UpstreamBaseUrl = UpstreamBaseUrl,
-        UserAgent = UserAgent,
+        CompatibilityMode = CompatibilityMode,
+        DirectCodexBaseUrl = DirectCodexBaseUrl,
         ExtraRequestHeaders = new Dictionary<string, string>(ExtraRequestHeaders, StringComparer.OrdinalIgnoreCase),
-        OverwriteUserAgent = OverwriteUserAgent,
         LogTraffic = LogTraffic
     };
 }
