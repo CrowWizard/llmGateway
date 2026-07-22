@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>LlmGateway.Desktop</RootNamespace>
-    <AssemblyName>CodexConfig</AssemblyName>
+    <AssemblyName>LlmGateway.Desktop</AssemblyName>
     <Product>Codex 配置</Product>
     <Description>Codex 模型、凭据与兼容连接配置工具</Description>
     <ApplicationIcon>Assets/codex-config.ico</ApplicationIcon>
