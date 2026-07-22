@@ -494,12 +494,13 @@ static class ResponsesCompatibility
                     return false;
                 }
 
-                if (!TryConvertContent(item["content"], role, out var content, out var contentError))
+                var chatRole = role == "developer" ? "system" : role;
+                if (!TryConvertContent(item["content"], chatRole, out var content, out var contentError))
                 {
                     error = (contentError ?? "Unsupported message content.", "input");
                     return false;
                 }
-                messages.Add(new JsonObject { ["role"] = role, ["content"] = content });
+                messages.Add(new JsonObject { ["role"] = chatRole, ["content"] = content });
             }
             else if (type == "function_call")
             {

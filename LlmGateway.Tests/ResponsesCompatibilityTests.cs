@@ -24,6 +24,27 @@ public sealed class ResponsesCompatibilityTests
     }
 
     [Fact]
+    public void ConvertsDeveloperInputMessageToSystem()
+    {
+        var source = Parse("""
+        {
+          "model": "test-model",
+          "input": [
+            { "type": "message", "role": "developer", "content": "Follow project rules" },
+            { "type": "message", "role": "user", "content": "Hello" }
+          ]
+        }
+        """);
+
+        Assert.True(ResponsesCompatibility.TryConvertRequest(source, out var target, out var error), error?.Message);
+
+        var messages = target!["messages"]!.AsArray();
+        Assert.Equal("system", messages[0]!["role"]!.GetValue<string>());
+        Assert.Equal("Follow project rules", messages[0]!["content"]!.GetValue<string>());
+        Assert.Equal("user", messages[1]!["role"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void ConvertsBuiltInToolsAndToolChoice()
     {
         var source = Parse("""
