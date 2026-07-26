@@ -23,7 +23,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _localBindIp = "127.0.0.1";
     private int _listenPort = 23001;
     private string _upstreamBaseUrl = string.Empty;
-    private bool _compatibilityMode = true;
+    private bool _compatibilityMode;
     private bool _logTraffic;
     private bool _isGatewayRunning;
     private string _apiKey = string.Empty;
@@ -202,16 +202,21 @@ public sealed class MainWindowViewModel : ObservableObject
                 throw new InvalidOperationException("令牌不能为空。");
             }
 
-            var backup = (File.Exists(_paths.CodexConfigPath) || File.Exists(_paths.CodexAuthPath))
-                ? _backupService.Create().DisplayName
-                : "首次配置，无旧文件";
+            var hasExistingConfiguration = File.Exists(_paths.CodexConfigPath) || File.Exists(_paths.CodexAuthPath);
+            var configurationName = EndpointNormalizer.GetConfigurationName(
+                CompatibilityMode ? UpstreamBaseUrl : CodexBaseUrl);
+            var backup = hasExistingConfiguration ? _backupService.Create(configurationName).DisplayName : string.Empty;
             await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
             await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
             await _codexConfig.SaveAsync(CurrentCodexSettings());
             var authResult = await _codexAuth.EnsureAsync();
+            if (!hasExistingConfiguration)
+            {
+                backup = _backupService.Create("原始配置").DisplayName;
+            }
             RefreshBackups();
             GatewayStatus = "全部配置已保存；运行中的网关需重启后应用。";
-            CodexStatus = $"Codex 配置已保存；自动备份：{backup}{(authResult.PlaceholderCreated ? "；已创建 auth.json 安全占位 Key" : string.Empty)}。";
+            CodexStatus = $"Codex 配置已保存；已保存配置：{backup}{(authResult.PlaceholderCreated ? "；已创建 auth.json 安全占位 Key" : string.Empty)}。";
         }
         catch (Exception exception)
         {
@@ -295,7 +300,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (File.Exists(_paths.CodexConfigPath) || File.Exists(_paths.CodexAuthPath))
             {
-                _backupService.Create();
+                _backupService.Create("还原前配置");
             }
             var selected = SelectedBackup;
             await _backupService.RestoreAsync(selected);
@@ -358,9 +363,9 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         LocalBindIp = LocalBindIp,
         ListenPort = ListenPort,
-        UpstreamBaseUrl = UpstreamBaseUrl,
+        UpstreamBaseUrl = EndpointNormalizer.Normalize(UpstreamBaseUrl),
         CompatibilityMode = CompatibilityMode,
-        DirectCodexBaseUrl = CodexBaseUrl,
+        DirectCodexBaseUrl = EndpointNormalizer.Normalize(CodexBaseUrl),
         LogTraffic = LogTraffic,
         ExtraRequestHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -372,7 +377,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         Model = Model,
         Provider = Provider,
-        BaseUrl = EffectiveCodexBaseUrl,
+        BaseUrl = EndpointNormalizer.Normalize(EffectiveCodexBaseUrl),
         EnvironmentKey = EnvironmentKey
     };
 
@@ -380,11 +385,11 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         LocalBindIp = settings.LocalBindIp;
         ListenPort = settings.ListenPort;
-        UpstreamBaseUrl = settings.UpstreamBaseUrl;
+        UpstreamBaseUrl = EndpointNormalizer.Normalize(settings.UpstreamBaseUrl);
         CompatibilityMode = settings.CompatibilityMode;
         if (!string.IsNullOrWhiteSpace(settings.DirectCodexBaseUrl))
         {
-            CodexBaseUrl = settings.DirectCodexBaseUrl;
+            CodexBaseUrl = EndpointNormalizer.Normalize(settings.DirectCodexBaseUrl);
         }
         LogTraffic = settings.LogTraffic;
     }
@@ -393,7 +398,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         Model = settings.Model;
         Provider = settings.Provider;
-        CodexBaseUrl = settings.BaseUrl;
+        CodexBaseUrl = EndpointNormalizer.Normalize(settings.BaseUrl);
         EnvironmentKey = settings.EnvironmentKey;
         Models.Clear();
         Models.Add(Model);

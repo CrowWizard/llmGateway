@@ -167,13 +167,13 @@
             <Border Classes="card">
               <StackPanel Spacing="14">
                 <StackPanel Spacing="4">
-                  <TextBlock Classes="section-title" Text="备份与还原" />
-                  <TextBlock Classes="caption" Text="管理 Codex 配置的本地备份。" />
+                  <TextBlock Classes="section-title" Text="切换配置" />
+                  <TextBlock Classes="caption" Text="保存并切换 Codex 配置。" />
                 </StackPanel>
                 <ComboBox ItemsSource="{Binding Backups}" SelectedItem="{Binding SelectedBackup}" DisplayMemberBinding="{Binding Label}" PlaceholderText="暂无备份" />
                 <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
                   <Button Classes="secondary" Command="{Binding RefreshBackupsCommand}" Content="刷新" />
-                  <Button Grid.Column="1" Classes="danger" Command="{Binding RestoreBackupCommand}" Content="还原所选" />
+                  <Button Grid.Column="1" Classes="secondary" Command="{Binding RestoreBackupCommand}" Content="切换到所选" />
                   <Button Grid.Column="2" HorizontalAlignment="Right" Classes="ghost" Command="{Binding OpenCodexDirectoryCommand}" Content="打开目录" />
                 </Grid>
               </StackPanel>

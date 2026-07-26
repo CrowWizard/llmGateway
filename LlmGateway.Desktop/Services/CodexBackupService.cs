@@ -4,7 +4,7 @@ namespace LlmGateway.Desktop.Services;
 
 public sealed class CodexBackupService(AppPaths paths)
 {
-    public BackupItem Create()
+    public BackupItem Create(string name)
     {
         var hasConfig = File.Exists(paths.CodexConfigPath);
         var hasAuth = File.Exists(paths.CodexAuthPath);
@@ -14,7 +14,8 @@ public sealed class CodexBackupService(AppPaths paths)
         }
 
         Directory.CreateDirectory(paths.BackupDirectory);
-        var baseId = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss-fff");
+        var safeName = SanitizeName(name);
+        var baseId = $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss-fff}_{safeName}";
         var id = baseId;
         var directory = Path.Combine(paths.BackupDirectory, id);
         for (var suffix = 0; Directory.Exists(directory) && suffix < 1000; suffix++)
@@ -124,15 +125,24 @@ public sealed class CodexBackupService(AppPaths paths)
     private static BackupItem CreateItem(string directory)
     {
         var id = Path.GetFileName(directory);
-        var displayName = id.Length >= 23
-            ? $"{id[..10]}  {id.Substring(11, 2)}:{id.Substring(14, 2)}:{id.Substring(17, 2)}.{id.Substring(20, 3)}{id[23..]}"
+        var timestamp = id.Length >= 23
+            ? $"{id[..10]}  {id.Substring(11, 2)}:{id.Substring(14, 2)}:{id.Substring(17, 2)}"
             : id;
+        var name = id.Length > 24 && id[23] == '_' ? id[24..] : string.Empty;
+        var displayName = string.IsNullOrWhiteSpace(name) ? timestamp : $"{timestamp}  {name}";
         return new BackupItem(
             id,
             displayName,
             directory,
             File.Exists(Path.Combine(directory, "config.toml")),
             File.Exists(Path.Combine(directory, "auth.json")));
+    }
+
+    private static string SanitizeName(string value)
+    {
+        var sanitized = string.Concat(value.Select(character =>
+            char.IsLetterOrDigit(character) || character is '-' or '_' ? character : '-'));
+        return string.IsNullOrWhiteSpace(sanitized) ? "自定义配置" : sanitized.Trim('-');
     }
 
     private static void CopyVerified(string source, string destination)

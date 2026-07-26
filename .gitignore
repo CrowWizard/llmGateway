@@ -1,0 +1,26 @@
+# .NET build output
+[Bb]in/
+[Oo]bj/
+[Pp]ublish/
+
+# Visual Studio and Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Test output and coverage
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# Local development settings
+appsettings.Development.local.json
+appsettings.Local.json
+
+# OS files
+.DS_Store
+Thumbs.db
