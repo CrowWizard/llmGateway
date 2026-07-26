@@ -225,7 +225,10 @@ public sealed class MainWindowViewModel : ObservableObject
             var endpoint = CompatibilityMode ? UpstreamBaseUrl : CodexBaseUrl;
             Provider = EndpointNormalizer.GetConfigurationName(endpoint);
             EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(endpoint);
-            await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
+            if (CompatibilityMode)
+            {
+                await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
+            }
             await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
             await _codexConfig.SaveAsync(CurrentCodexSettings());
             var authResult = await _codexAuth.EnsureAsync();
@@ -234,7 +237,9 @@ public sealed class MainWindowViewModel : ObservableObject
                 backup = _backupService.Create("原始配置").DisplayName;
             }
             RefreshBackups();
-            GatewayStatus = "全部配置已保存；运行中的网关需重启后应用。";
+            GatewayStatus = CompatibilityMode
+                ? "全部配置已保存；运行中的网关需重启后应用。"
+                : "Codex 配置已保存。";
             CodexStatus = $"Codex 配置已保存；已保存配置：{backup}{(authResult.PlaceholderCreated ? "；已创建 auth.json 安全占位 Key" : string.Empty)}。";
         }
         catch (Exception exception)
