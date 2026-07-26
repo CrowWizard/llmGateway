@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("LlmGateway")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a105a67688e6f83aa45c942d5e1ea80e15940e35")]
 [assembly: System.Reflection.AssemblyProductAttribute("LlmGateway")]
 [assembly: System.Reflection.AssemblyTitleAttribute("LlmGateway")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

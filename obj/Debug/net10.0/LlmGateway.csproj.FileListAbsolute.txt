@@ -31,3 +31,10 @@
 /home/gowork/llmGateway/obj/Debug/net10.0/LlmGateway.pdb
 /home/gowork/llmGateway/obj/Debug/net10.0/LlmGateway.genruntimeconfig.cache
 /home/gowork/llmGateway/obj/Debug/net10.0/ref/LlmGateway.dll
+/home/gowork/llmGateway/bin/Debug/net10.0/publish/linux-x64/web.config
+/home/gowork/llmGateway/bin/Debug/net10.0/publish/linux-x64/appsettings.json
+/home/gowork/llmGateway/bin/Debug/net10.0/publish/linux-x64/LlmGateway.deps.json
+/home/gowork/llmGateway/bin/Debug/net10.0/publish/linux-x64/LlmGateway.runtimeconfig.json
+/home/gowork/llmGateway/bin/Debug/net10.0/publish/linux-x64/LlmGateway.staticwebassets.endpoints.json
+/home/gowork/llmGateway/bin/Debug/net10.0/publish/linux-x64/publish/appsettings.json
+/home/gowork/llmGateway/obj/Debug/net10.0/LlmGateway.sourcelink.json
