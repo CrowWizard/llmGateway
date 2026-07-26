@@ -218,7 +218,9 @@ public sealed class MainWindowViewModel : ObservableObject
             }
 
             var hasExistingConfiguration = File.Exists(_paths.CodexConfigPath) || File.Exists(_paths.CodexAuthPath);
-            var previousConfigurationName = EndpointNormalizer.GetConfigurationName(_codexConfig.Load().BaseUrl);
+            var previousBaseUrl = _codexConfig.Load().BaseUrl;
+            var previousConfigurationName = EndpointNormalizer.GetConfigurationName(
+                IsLocalGatewayUrl(previousBaseUrl) ? UpstreamBaseUrl : previousBaseUrl);
             var backup = hasExistingConfiguration ? _backupService.Create(previousConfigurationName).DisplayName : string.Empty;
             var endpoint = CompatibilityMode ? UpstreamBaseUrl : CodexBaseUrl;
             Provider = EndpointNormalizer.GetConfigurationName(endpoint);
@@ -358,6 +360,11 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         return Task.CompletedTask;
     }
+
+    private static bool IsLocalGatewayUrl(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        (string.Equals(uri.Host, "127.0.0.1", StringComparison.Ordinal) ||
+         string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase));
 
     private void ApplyEndpointIdentity(string endpoint)
     {

@@ -14,19 +14,11 @@ public sealed class CodexBackupService(AppPaths paths)
         }
 
         Directory.CreateDirectory(paths.BackupDirectory);
-        var safeName = SanitizeName(name);
-        var baseId = $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss-fff}_{safeName}";
-        var id = baseId;
+        var id = SanitizeName(name);
         var directory = Path.Combine(paths.BackupDirectory, id);
-        for (var suffix = 0; Directory.Exists(directory) && suffix < 1000; suffix++)
-        {
-            id = $"{baseId}-{suffix + 1}";
-            directory = Path.Combine(paths.BackupDirectory, id);
-        }
-
         if (Directory.Exists(directory))
         {
-            throw new IOException("无法创建唯一的备份目录。");
+            Directory.Delete(directory, true);
         }
 
         Directory.CreateDirectory(directory);
@@ -60,7 +52,7 @@ public sealed class CodexBackupService(AppPaths paths)
         return Directory.EnumerateDirectories(paths.BackupDirectory)
             .Select(CreateItem)
             .Where(item => item.HasConfig || item.HasAuth)
-            .OrderByDescending(item => item.Id, StringComparer.Ordinal)
+            .OrderBy(item => item.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 
@@ -125,14 +117,9 @@ public sealed class CodexBackupService(AppPaths paths)
     private static BackupItem CreateItem(string directory)
     {
         var id = Path.GetFileName(directory);
-        var timestamp = id.Length >= 23
-            ? $"{id[..10]}  {id.Substring(11, 2)}:{id.Substring(14, 2)}:{id.Substring(17, 2)}"
-            : id;
-        var name = id.Length > 24 && id[23] == '_' ? id[24..] : string.Empty;
-        var displayName = string.IsNullOrWhiteSpace(name) ? timestamp : $"{timestamp}  {name}";
         return new BackupItem(
             id,
-            displayName,
+            id,
             directory,
             File.Exists(Path.Combine(directory, "config.toml")),
             File.Exists(Path.Combine(directory, "auth.json")));

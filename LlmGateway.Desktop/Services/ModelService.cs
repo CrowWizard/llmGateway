@@ -6,6 +6,7 @@ namespace LlmGateway.Desktop.Services;
 public sealed class ModelService
 {
     private const int MaxResponseBytes = 4 * 1024 * 1024;
+    private const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
     private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     public async Task<IReadOnlyList<string>> FetchAsync(string baseUrl, string apiKey, CancellationToken cancellationToken = default)
@@ -31,6 +32,7 @@ public sealed class ModelService
 
         using var request = new HttpRequestMessage(HttpMethod.Get, modelsUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        request.Headers.UserAgent.ParseAdd(UserAgent);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
