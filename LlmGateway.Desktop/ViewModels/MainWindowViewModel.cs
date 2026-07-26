@@ -118,7 +118,17 @@ public sealed class MainWindowViewModel : ObservableObject
             }
         }
     }
-    public string UpstreamBaseUrl { get => _upstreamBaseUrl; set => SetProperty(ref _upstreamBaseUrl, value); }
+    public string UpstreamBaseUrl
+    {
+        get => _upstreamBaseUrl;
+        set
+        {
+            if (SetProperty(ref _upstreamBaseUrl, value) && CompatibilityMode)
+            {
+                ApplyEndpointIdentity(value);
+            }
+        }
+    }
     public bool CompatibilityMode
     {
         get => _compatibilityMode;
@@ -126,6 +136,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (SetProperty(ref _compatibilityMode, value))
             {
+                ApplyEndpointIdentity(value ? UpstreamBaseUrl : CodexBaseUrl);
                 OnPropertyChanged(nameof(IsDirectCodexMode));
                 OnPropertyChanged(nameof(EffectiveCodexBaseUrl));
             }
@@ -160,6 +171,10 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (SetProperty(ref _codexBaseUrl, value))
             {
+                if (!CompatibilityMode)
+                {
+                    ApplyEndpointIdentity(value);
+                }
                 OnPropertyChanged(nameof(EffectiveCodexBaseUrl));
             }
         }
@@ -203,9 +218,11 @@ public sealed class MainWindowViewModel : ObservableObject
             }
 
             var hasExistingConfiguration = File.Exists(_paths.CodexConfigPath) || File.Exists(_paths.CodexAuthPath);
-            var configurationName = EndpointNormalizer.GetConfigurationName(
-                CompatibilityMode ? UpstreamBaseUrl : CodexBaseUrl);
-            var backup = hasExistingConfiguration ? _backupService.Create(configurationName).DisplayName : string.Empty;
+            var previousConfigurationName = EndpointNormalizer.GetConfigurationName(_codexConfig.Load().BaseUrl);
+            var backup = hasExistingConfiguration ? _backupService.Create(previousConfigurationName).DisplayName : string.Empty;
+            var endpoint = CompatibilityMode ? UpstreamBaseUrl : CodexBaseUrl;
+            Provider = EndpointNormalizer.GetConfigurationName(endpoint);
+            EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(endpoint);
             await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
             await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
             await _codexConfig.SaveAsync(CurrentCodexSettings());
@@ -342,6 +359,12 @@ public sealed class MainWindowViewModel : ObservableObject
         return Task.CompletedTask;
     }
 
+    private void ApplyEndpointIdentity(string endpoint)
+    {
+        Provider = EndpointNormalizer.GetConfigurationName(endpoint);
+        EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(endpoint);
+    }
+
     private void RefreshBackups()
     {
         var previousId = SelectedBackup?.Id;
@@ -397,9 +420,9 @@ public sealed class MainWindowViewModel : ObservableObject
     private void ApplyCodex(CodexSettings settings)
     {
         Model = settings.Model;
-        Provider = settings.Provider;
         CodexBaseUrl = EndpointNormalizer.Normalize(settings.BaseUrl);
-        EnvironmentKey = settings.EnvironmentKey;
+        Provider = EndpointNormalizer.GetConfigurationName(CodexBaseUrl);
+        EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(CodexBaseUrl);
         Models.Clear();
         Models.Add(Model);
     }

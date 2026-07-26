@@ -21,10 +21,13 @@ public static class EndpointNormalizer
     {
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
         {
-            return "自定义配置";
+            return "默认配置";
         }
 
         var labels = uri.Host.Split('.', StringSplitOptions.RemoveEmptyEntries);
         return labels.Length >= 3 ? labels[^2] : labels[0];
     }
+
+    public static string GetEnvironmentKey(string value) =>
+        $"{GetConfigurationName(value).ToUpperInvariant()}_API_KEY";
 }

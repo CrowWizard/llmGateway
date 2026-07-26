@@ -22,7 +22,7 @@
           <Border Classes="status-badge">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <Ellipse Width="7" Height="7" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding GatewayStateText}" FontSize="12" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding GatewayStateText}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
             </StackPanel>
           </Border>
           <Button Classes="primary" Command="{Binding SaveConfigurationCommand}" Content="保存配置" />
@@ -30,31 +30,8 @@
       </Grid>
     </Border>
 
-    <Grid Grid.Row="1" ColumnDefinitions="196,1,*">
-      <Border Background="{DynamicResource SurfaceRaisedBrush}" Padding="16,20">
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto" RowSpacing="6">
-          <TextBlock Classes="nav-label" Text="工作区" Margin="8,0,0,8" />
-          <Border Grid.Row="1" Background="{DynamicResource SurfaceActiveBrush}" CornerRadius="6" Padding="10,8">
-            <TextBlock Text="连接配置" FontWeight="SemiBold" />
-          </Border>
-          <Border Grid.Row="2" Background="Transparent" CornerRadius="6" Padding="10,8">
-            <TextBlock Classes="nav-label" Text="本地兼容服务" />
-          </Border>
-          <Border Grid.Row="3" Background="Transparent" CornerRadius="6" Padding="10,8">
-            <TextBlock Classes="nav-label" Text="运行日志" />
-          </Border>
-          <Border Grid.Row="4" Background="Transparent" CornerRadius="6" Padding="10,8">
-            <TextBlock Classes="nav-label" Text="备份与应用" />
-          </Border>
-          <StackPanel Grid.Row="6" Spacing="5" Margin="8,0">
-            <TextBlock Classes="nav-label" Text="配置目录" />
-            <TextBlock Text="{Binding CodexDirectory}" FontSize="11" Foreground="{DynamicResource TextSubtlestBrush}" TextWrapping="Wrap" />
-          </StackPanel>
-        </Grid>
-      </Border>
-      <Border Grid.Column="1" Background="{DynamicResource BorderSubtleBrush}" />
-
-      <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Disabled">
+    <Grid Grid.Row="1">
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="28,24,28,28" Spacing="16">
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="20">
             <StackPanel Spacing="4">
@@ -74,16 +51,6 @@
                 <StackPanel Grid.Column="1" Spacing="6">
                   <TextBlock Classes="caption" Text="模型" />
                   <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding Model}" IsEditable="True" />
-                </StackPanel>
-              </Grid>
-              <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
-                <StackPanel Spacing="6">
-                  <TextBlock Classes="caption" Text="Provider" />
-                  <TextBox Text="{Binding Provider}" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Spacing="6">
-                  <TextBlock Classes="caption" Text="API Key 环境变量" />
-                  <TextBox Text="{Binding EnvironmentKey}" />
                 </StackPanel>
               </Grid>
               <StackPanel IsVisible="{Binding IsDirectCodexMode}" Spacing="6">
@@ -107,7 +74,7 @@
                 <Border Grid.Column="1" Classes="status-badge">
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <Ellipse Width="7" Height="7" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding GatewayStateText}" FontSize="12" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding GatewayStateText}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
                   </StackPanel>
                 </Border>
               </Grid>
@@ -127,7 +94,7 @@
               </Grid>
               <StackPanel Spacing="6">
                 <TextBlock Classes="caption" Text="Codex Base URL" />
-                <TextBox Text="{Binding EffectiveCodexBaseUrl}" IsReadOnly="True" />
+                <TextBox Text="{Binding EffectiveCodexBaseUrl}" IsReadOnly="True" VerticalContentAlignment="Center" />
               </StackPanel>
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <CheckBox IsChecked="{Binding LogTraffic}" Content="记录脱敏运行日志" VerticalAlignment="Center" />
@@ -170,7 +137,7 @@
                   <TextBlock Classes="section-title" Text="切换配置" />
                   <TextBlock Classes="caption" Text="保存并切换 Codex 配置。" />
                 </StackPanel>
-                <ComboBox ItemsSource="{Binding Backups}" SelectedItem="{Binding SelectedBackup}" DisplayMemberBinding="{Binding Label}" PlaceholderText="暂无备份" />
+                <ComboBox ItemsSource="{Binding Backups}" SelectedItem="{Binding SelectedBackup}" DisplayMemberBinding="{Binding DisplayName}" PlaceholderText="默认配置" />
                 <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
                   <Button Classes="secondary" Command="{Binding RefreshBackupsCommand}" Content="刷新" />
                   <Button Grid.Column="1" Classes="secondary" Command="{Binding RestoreBackupCommand}" Content="切换到所选" />

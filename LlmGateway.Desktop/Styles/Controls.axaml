@@ -38,6 +38,7 @@
     <Setter Property="Background" Value="{DynamicResource SuccessMutedBrush}" />
     <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}" />
     <Setter Property="Padding" Value="8,4" />
+    <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
   <Style Selector="Border.feedback-panel">
     <Setter Property="Background" Value="{DynamicResource PrimaryMutedBrush}" />
