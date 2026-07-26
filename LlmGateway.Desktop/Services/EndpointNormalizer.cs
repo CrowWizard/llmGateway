@@ -4,17 +4,7 @@ public static class EndpointNormalizer
 {
     public static string Normalize(string value)
     {
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
-            !string.Equals(uri.Host, "image.lingjue.chat", StringComparison.OrdinalIgnoreCase))
-        {
-            return value;
-        }
-
-        var builder = new UriBuilder(uri)
-        {
-            Host = "api.ailili.chat"
-        };
-        return builder.Uri.AbsoluteUri.TrimEnd('/');
+        return value;
     }
 
     public static string GetConfigurationName(string value)
