@@ -55,7 +55,7 @@
               </Grid>
               <StackPanel IsVisible="{Binding IsDirectCodexMode}" Spacing="6">
                 <TextBlock Classes="caption" Text="Base URL" />
-                <TextBox Text="{Binding CodexBaseUrl}" PlaceholderText="https://api.example.com/v1" />
+                <TextBox Text="{Binding CodexBaseUrl}" IsReadOnly="True" PlaceholderText="https://api.example.com/v1" VerticalContentAlignment="Center" />
               </StackPanel>
               <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
                 <Button Classes="secondary" Command="{Binding ToggleApiKeyCommand}" Content="显示 / 隐藏 Key" />
@@ -89,7 +89,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="2" Spacing="6">
                   <TextBlock Classes="caption" Text="上游 Base URL" />
-                  <TextBox Text="{Binding UpstreamBaseUrl}" PlaceholderText="https://api.example.com" />
+                  <TextBox Text="{Binding UpstreamBaseUrl}" PlaceholderText="https://api.example.com" VerticalContentAlignment="Center" />
                 </StackPanel>
               </Grid>
               <StackPanel Spacing="6">
