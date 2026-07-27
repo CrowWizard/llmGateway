@@ -37,6 +37,49 @@ public sealed class ApplicationLauncher
         Launch(DetectChatGpt(), workingDirectory);
     }
 
+    public async Task CloseManagedClientsAsync(CancellationToken cancellationToken = default)
+    {
+        var processes = new[] { "ChatGPT", "chatgpt", "codex" }
+            .SelectMany(Process.GetProcessesByName)
+            .GroupBy(process => process.Id)
+            .Select(group => group.First())
+            .ToArray();
+
+        foreach (var process in processes)
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.CloseMainWindow();
+                }
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+
+        foreach (var process in processes)
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(true);
+                }
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+    }
+
     public void OpenDirectory(string directory)
     {
         Directory.CreateDirectory(directory);

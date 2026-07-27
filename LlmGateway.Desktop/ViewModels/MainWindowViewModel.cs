@@ -212,6 +212,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         try
         {
+            await _launcher.CloseManagedClientsAsync();
             if (string.IsNullOrWhiteSpace(ApiKey))
             {
                 throw new InvalidOperationException("令牌不能为空。");
@@ -253,6 +254,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         try
         {
+            await _launcher.CloseManagedClientsAsync();
             await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
             await _gatewayHost.StartAsync(CurrentGatewaySettings());
             IsGatewayRunning = true;
