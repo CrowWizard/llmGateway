@@ -14,6 +14,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly CodexConfigService _codexConfig;
     private readonly CodexAuthService _codexAuth;
     private readonly CodexBackupService _backupService;
+    private readonly CodexStateService _codexStateService;
     private readonly EnvironmentVariableService _environmentService;
     private readonly ModelService _modelService;
     private readonly ApplicationLauncher _launcher;
@@ -44,6 +45,7 @@ public sealed class MainWindowViewModel : ObservableObject
         CodexConfigService codexConfig,
         CodexAuthService codexAuth,
         CodexBackupService backupService,
+        CodexStateService codexStateService,
         EnvironmentVariableService environmentService,
         ModelService modelService,
         ApplicationLauncher launcher)
@@ -54,6 +56,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _codexConfig = codexConfig;
         _codexAuth = codexAuth;
         _backupService = backupService;
+        _codexStateService = codexStateService;
         _environmentService = environmentService;
         _modelService = modelService;
         _launcher = launcher;
@@ -232,6 +235,7 @@ public sealed class MainWindowViewModel : ObservableObject
             }
             await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
             await _codexConfig.SaveAsync(CurrentCodexSettings());
+            await _codexStateService.SynchronizeModelProviderAsync(Provider);
             var authResult = await _codexAuth.EnsureAsync();
             if (!hasExistingConfiguration)
             {
@@ -331,6 +335,7 @@ public sealed class MainWindowViewModel : ObservableObject
             var selected = SelectedBackup;
             await _backupService.RestoreAsync(selected);
             ApplyCodex(_codexConfig.Load());
+            await _codexStateService.SynchronizeModelProviderAsync(Provider);
             ApiKey = _environmentService.Read(EnvironmentKey);
             RefreshBackups();
             CodexStatus = $"已还原：{selected.DisplayName}";

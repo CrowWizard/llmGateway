@@ -39,6 +39,7 @@ public sealed class CodexBackupService(AppPaths paths)
             throw;
         }
 
+        BackupStateDatabase();
         return CreateItem(directory);
     }
 
@@ -108,6 +109,18 @@ public sealed class CodexBackupService(AppPaths paths)
             }
             throw new InvalidOperationException($"还原失败，已恢复还原前状态：{restoreException.Message}", restoreException);
         }
+    }
+
+    private void BackupStateDatabase()
+    {
+        if (!File.Exists(paths.CodexStateDatabasePath))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(paths.StateBackupDirectory);
+        var destination = Path.Combine(paths.StateBackupDirectory, $"state_5_{DateTime.Now:yyyy-MM-dd_HH-mm-ss-fff}.sqlite");
+        CopyVerified(paths.CodexStateDatabasePath, destination);
     }
 
     private static StringComparison PathComparison => OperatingSystem.IsWindows()

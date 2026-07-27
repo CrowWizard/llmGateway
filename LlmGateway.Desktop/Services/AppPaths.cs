@@ -18,7 +18,9 @@ public sealed class AppPaths
     public string CodexDirectory => Path.Combine(UserHome, ".codex");
     public string CodexConfigPath => Path.Combine(CodexDirectory, "config.toml");
     public string CodexAuthPath => Path.Combine(CodexDirectory, "auth.json");
+    public string CodexStateDatabasePath => Path.Combine(CodexDirectory, "state_5.sqlite");
     public string BackupDirectory => Path.Combine(CodexDirectory, "bak");
+    public string StateBackupDirectory => Path.Combine(BackupDirectory, "state");
     public string GatewaySettingsPath => Path.Combine(ApplicationDirectory, "appsettings.json");
     public string LinuxEnvironmentPath => Path.Combine(CodexDirectory, "llm-gateway.env");
 }
