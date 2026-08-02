@@ -26,7 +26,6 @@ public sealed partial class App : Application
                 new CodexBackupService(paths),
                 new CodexStateService(paths),
                 new EnvironmentVariableService(paths),
-                new CodexSkillService(paths),
                 new ModelService(),
                 new ApplicationLauncher());
 

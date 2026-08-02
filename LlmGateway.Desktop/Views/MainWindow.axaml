@@ -157,12 +157,11 @@
               <StackPanel Spacing="14">
                 <StackPanel Spacing="4">
                   <TextBlock Classes="section-title" Text="工具" />
-                  <TextBlock Classes="caption" Text="管理 ChatGPT 和 Codex Skills。" TextWrapping="Wrap" />
+                  <TextBlock Classes="caption" Text="启动 ChatGPT 客户端。" TextWrapping="Wrap" />
                 </StackPanel>
                 <StackPanel Spacing="8">
                   <Button HorizontalAlignment="Stretch" Classes="primary" Command="{Binding LaunchChatGptCommand}" Content="启动 ChatGPT" />
                   <TextBlock Classes="caption" Text="{Binding ApplicationStatus}" TextWrapping="Wrap" />
-                  <Button IsVisible="{Binding CanInstallImagePromptGuide}" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallImagePromptGuideCommand}" Content="安装电商生图 Skill" />
                 </StackPanel>
               </StackPanel>
             </Border>
