@@ -16,6 +16,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly CodexBackupService _backupService;
     private readonly CodexStateService _codexStateService;
     private readonly EnvironmentVariableService _environmentService;
+    private readonly CodexSkillService _codexSkillService;
     private readonly ModelService _modelService;
     private readonly ApplicationLauncher _launcher;
     private readonly AsyncCommand _startGatewayCommand;
@@ -47,6 +48,7 @@ public sealed class MainWindowViewModel : ObservableObject
         CodexBackupService backupService,
         CodexStateService codexStateService,
         EnvironmentVariableService environmentService,
+        CodexSkillService codexSkillService,
         ModelService modelService,
         ApplicationLauncher launcher)
     {
@@ -58,6 +60,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _backupService = backupService;
         _codexStateService = codexStateService;
         _environmentService = environmentService;
+        _codexSkillService = codexSkillService;
         _modelService = modelService;
         _launcher = launcher;
 
@@ -71,6 +74,7 @@ public sealed class MainWindowViewModel : ObservableObject
         RefreshBackupsCommand = new AsyncCommand(RefreshBackupsAsync);
         LaunchChatGptCommand = new AsyncCommand(LaunchChatGptAsync);
         OpenCodexDirectoryCommand = new AsyncCommand(OpenCodexDirectoryAsync);
+        InstallImagePromptGuideCommand = new AsyncCommand(InstallImagePromptGuideAsync);
         ToggleApiKeyCommand = new AsyncCommand(() =>
         {
             IsApiKeyVisible = !IsApiKeyVisible;
@@ -106,6 +110,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand RefreshBackupsCommand { get; }
     public AsyncCommand LaunchChatGptCommand { get; }
     public AsyncCommand OpenCodexDirectoryCommand { get; }
+    public AsyncCommand InstallImagePromptGuideCommand { get; }
     public AsyncCommand ToggleApiKeyCommand { get; }
     public AsyncCommand ClearLogsCommand { get; }
 
@@ -141,11 +146,14 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 ApplyEndpointIdentity(value ? UpstreamBaseUrl : CodexBaseUrl);
                 OnPropertyChanged(nameof(IsDirectCodexMode));
+                OnPropertyChanged(nameof(CanInstallImagePromptGuide));
                 OnPropertyChanged(nameof(EffectiveCodexBaseUrl));
             }
         }
     }
     public bool IsDirectCodexMode => !CompatibilityMode;
+    public bool CanInstallImagePromptGuide =>
+        IsDirectCodexMode && File.Exists(Path.Combine(_paths.ImagePromptGuideDirectory, "SKILL.md"));
     public string EffectiveCodexBaseUrl => CompatibilityMode
         ? $"http://127.0.0.1:{ListenPort}/v1"
         : CodexBaseUrl;
@@ -376,6 +384,20 @@ public sealed class MainWindowViewModel : ObservableObject
         catch (Exception exception)
         {
             CodexStatus = $"打开目录失败：{exception.Message}";
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task InstallImagePromptGuideAsync()
+    {
+        try
+        {
+            var installedDirectory = _codexSkillService.InstallImagePromptGuide();
+            CodexStatus = $"电商生图 Skill 已安装到：{installedDirectory}";
+        }
+        catch (Exception exception)
+        {
+            CodexStatus = $"安装 Skill 失败：{exception.Message}";
         }
         return Task.CompletedTask;
     }

@@ -4,9 +4,9 @@ public sealed class GatewaySettings
 {
     public string LocalBindIp { get; set; } = "127.0.0.1";
     public int ListenPort { get; set; } = 23001;
-    public string UpstreamBaseUrl { get; set; } = "https://image.lingjue.chat/";
+    public string UpstreamBaseUrl { get; set; } = "https://api.ailili.chat";
     public bool CompatibilityMode { get; set; }
-    public string DirectCodexBaseUrl { get; set; } = "https://image.lingjue.chat/v1";
+    public string DirectCodexBaseUrl { get; set; } = "https://api.ailili.chat/v1";
     public Dictionary<string, string> ExtraRequestHeaders { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Accept-Language"] = "zh-CN,zh;q=0.9,en;q=0.8"
@@ -29,7 +29,7 @@ public sealed class CodexSettings
 {
     public string Model { get; set; } = "kaka-5.5";
     public string Provider { get; set; } = "dzdy";
-    public string BaseUrl { get; set; } = "https://image.lingjue.chat/v1";
+    public string BaseUrl { get; set; } = "https://api.ailili.chat/v1";
     public string EnvironmentKey { get; set; } = "DZDY_API_KEY";
 }
 

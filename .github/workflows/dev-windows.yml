@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - dev
+      - ailili
   workflow_dispatch:
 
 permissions:
