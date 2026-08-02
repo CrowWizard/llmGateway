@@ -16,6 +16,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly CodexBackupService _backupService;
     private readonly CodexStateService _codexStateService;
     private readonly EnvironmentVariableService _environmentService;
+    private readonly CodexPluginService _codexPluginService;
+    private readonly PythonRuntimeService _pythonRuntimeService;
     private readonly ModelService _modelService;
     private readonly ApplicationLauncher _launcher;
     private readonly AsyncCommand _startGatewayCommand;
@@ -49,6 +51,8 @@ public sealed class MainWindowViewModel : ObservableObject
         CodexBackupService backupService,
         CodexStateService codexStateService,
         EnvironmentVariableService environmentService,
+        CodexPluginService codexPluginService,
+        PythonRuntimeService pythonRuntimeService,
         ModelService modelService,
         ApplicationLauncher launcher)
     {
@@ -60,6 +64,8 @@ public sealed class MainWindowViewModel : ObservableObject
         _backupService = backupService;
         _codexStateService = codexStateService;
         _environmentService = environmentService;
+        _codexPluginService = codexPluginService;
+        _pythonRuntimeService = pythonRuntimeService;
         _modelService = modelService;
         _launcher = launcher;
 
@@ -74,6 +80,8 @@ public sealed class MainWindowViewModel : ObservableObject
         RefreshBackupsCommand = new AsyncCommand(RefreshBackupsAsync);
         LaunchChatGptCommand = new AsyncCommand(LaunchChatGptAsync);
         OpenCodexDirectoryCommand = new AsyncCommand(OpenCodexDirectoryAsync);
+        InstallEcommerceImageStudioCommand = new AsyncCommand(InstallEcommerceImageStudioAsync);
+        EnsurePythonCommand = new AsyncCommand(EnsurePythonAsync);
         ToggleApiKeyCommand = new AsyncCommand(() =>
         {
             IsApiKeyVisible = !IsApiKeyVisible;
@@ -110,6 +118,8 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand RefreshBackupsCommand { get; }
     public AsyncCommand LaunchChatGptCommand { get; }
     public AsyncCommand OpenCodexDirectoryCommand { get; }
+    public AsyncCommand InstallEcommerceImageStudioCommand { get; }
+    public AsyncCommand EnsurePythonCommand { get; }
     public AsyncCommand ToggleApiKeyCommand { get; }
     public AsyncCommand ClearLogsCommand { get; }
 
@@ -410,6 +420,33 @@ public sealed class MainWindowViewModel : ObservableObject
             CodexStatus = $"打开目录失败：{exception.Message}";
         }
         return Task.CompletedTask;
+    }
+
+    private Task InstallEcommerceImageStudioAsync()
+    {
+        try
+        {
+            var installedDirectory = _codexPluginService.InstallEcommerceImageStudio();
+            CodexStatus = $"电商生图插件已安装到：{installedDirectory}";
+        }
+        catch (Exception exception)
+        {
+            CodexStatus = $"安装电商生图插件失败：{exception.Message}";
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task EnsurePythonAsync()
+    {
+        try
+        {
+            CodexStatus = "正在检测 Python 环境…";
+            CodexStatus = await _pythonRuntimeService.EnsurePythonAsync();
+        }
+        catch (Exception exception)
+        {
+            CodexStatus = $"Python 处理失败：{exception.Message}";
+        }
     }
 
     private static bool IsLocalGatewayUrl(string value) =>

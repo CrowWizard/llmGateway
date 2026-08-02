@@ -26,6 +26,8 @@ public sealed partial class App : Application
                 new CodexBackupService(paths),
                 new CodexStateService(paths),
                 new EnvironmentVariableService(paths),
+                new CodexPluginService(paths),
+                new PythonRuntimeService(),
                 new ModelService(),
                 new ApplicationLauncher());
 

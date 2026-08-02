@@ -157,11 +157,13 @@
               <StackPanel Spacing="14">
                 <StackPanel Spacing="4">
                   <TextBlock Classes="section-title" Text="工具" />
-                  <TextBlock Classes="caption" Text="启动 ChatGPT 客户端。" TextWrapping="Wrap" />
+                  <TextBlock Classes="caption" Text="启动 ChatGPT 客户端或安装电商生图插件。" TextWrapping="Wrap" />
                 </StackPanel>
                 <StackPanel Spacing="8">
                   <Button HorizontalAlignment="Stretch" Classes="primary" Command="{Binding LaunchChatGptCommand}" Content="启动 ChatGPT" />
                   <TextBlock Classes="caption" Text="{Binding ApplicationStatus}" TextWrapping="Wrap" />
+                  <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallEcommerceImageStudioCommand}" Content="安装电商生图插件" />
+                  <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding EnsurePythonCommand}" Content="检测 / 安装 Python 3.14.6" />
                 </StackPanel>
               </StackPanel>
             </Border>

@@ -28,7 +28,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-    <Content Include="../image-prompt-guide/**" Link="image-prompt-guide/%(RecursiveDir)%(Filename)%(Extension)">
+    <Content Include="../ecommerce-image-studio/0.1.0/**" Link="ecommerce-image-studio/0.1.0/%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

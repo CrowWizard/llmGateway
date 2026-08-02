@@ -1,0 +1,12 @@
+{
+  "name": "ecommerce-image-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dependency-free MCP image tools for ecommerce image workflows.",
+  "type": "module",
+  "engines": { "node": ">=20.0.0" },
+  "scripts": {
+    "validate": "node scripts/validate-plugin.mjs",
+    "start": "node scripts/image-mcp-server.mjs"
+  }
+}
