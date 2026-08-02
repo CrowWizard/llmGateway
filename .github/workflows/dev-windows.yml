@@ -58,6 +58,7 @@ jobs:
         with:
           name: LlmGateway-Desktop-win-x64
           path: artifacts/LlmGateway-Desktop-win-x64/
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
 
