@@ -4,14 +4,13 @@ public sealed class CodexPluginService(AppPaths paths)
 {
     public string InstallEcommerceImageStudio()
     {
-        var sourceDirectory = paths.EcommerceImageStudioDirectory;
-        var manifestPath = Path.Combine(sourceDirectory, ".codex-plugin", "plugin.json");
-        if (!File.Exists(manifestPath))
+        var sourceDirectory = ResolveEcommerceImageStudioDirectory();
+        if (sourceDirectory is null)
         {
-            throw new InvalidOperationException("未找到内置电商生图插件。请重新安装应用。");
+            throw new InvalidOperationException($"未找到内置电商生图插件。请确认安装包包含 {paths.EcommerceImageStudioDirectory}，然后重新安装应用。");
         }
 
-        var targetDirectory = Path.Combine(paths.CodexPluginsDirectory, "ecommerce-image-studio", "0.1.0");
+        var targetDirectory = Path.Combine(paths.CodexPluginsDirectory, "ecommerce-image-studio", Path.GetFileName(sourceDirectory));
         foreach (var sourceFile in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
         {
             var relativePath = Path.GetRelativePath(sourceDirectory, sourceFile);
@@ -22,4 +21,25 @@ public sealed class CodexPluginService(AppPaths paths)
 
         return targetDirectory;
     }
+
+    private string? ResolveEcommerceImageStudioDirectory()
+    {
+        if (HasManifest(paths.EcommerceImageStudioDirectory))
+        {
+            return paths.EcommerceImageStudioDirectory;
+        }
+
+        var pluginRoot = Path.Combine(paths.ApplicationDirectory, "ecommerce-image-studio");
+        if (!Directory.Exists(pluginRoot))
+        {
+            return null;
+        }
+
+        return Directory.EnumerateDirectories(pluginRoot)
+            .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
+            .FirstOrDefault(HasManifest);
+    }
+
+    private static bool HasManifest(string directory) =>
+        File.Exists(Path.Combine(directory, ".codex-plugin", "plugin.json"));
 }
