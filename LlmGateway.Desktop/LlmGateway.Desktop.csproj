@@ -28,7 +28,11 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-    <Content Include="../ecommerce-image-studio/0.1.0/**" Link="ecommerce-image-studio/0.1.0/%(RecursiveDir)%(Filename)%(Extension)">
+    <Content Include="../ecommerce-image-studio/0.2.0/**" Link="ecommerce-image-studio/0.2.0/%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="../ecommerce-image-studio/marketplace.json" Link="ecommerce-image-studio/marketplace.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

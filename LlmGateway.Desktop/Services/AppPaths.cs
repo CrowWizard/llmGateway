@@ -24,7 +24,10 @@ public sealed class AppPaths
     public string CodexSkillsDirectory => Path.Combine(CodexDirectory, "skills");
     public string ImagePromptGuideDirectory => Path.Combine(ApplicationDirectory, "image-prompt-guide");
     public string CodexPluginsDirectory => Path.Combine(CodexDirectory, "plugins");
-    public string EcommerceImageStudioDirectory => Path.Combine(ApplicationDirectory, "ecommerce-image-studio", "0.1.0");
+    public string AgentsPluginsDirectory => Path.Combine(UserHome, ".agents", "plugins");
+    public string AgentsMarketplacePath => Path.Combine(AgentsPluginsDirectory, "marketplace.json");
+    public string EcommerceImageStudioDirectory => Path.Combine(ApplicationDirectory, "ecommerce-image-studio", "0.2.0");
+    public string EcommerceImageStudioMarketplacePath => Path.Combine(ApplicationDirectory, "ecommerce-image-studio", "marketplace.json");
     public string GatewaySettingsPath => Path.Combine(ApplicationDirectory, "appsettings.json");
     public string LinuxEnvironmentPath => Path.Combine(CodexDirectory, "llm-gateway.env");
     public string MacOsLaunchAgentsDirectory => Path.Combine(UserHome, "Library", "LaunchAgents");
