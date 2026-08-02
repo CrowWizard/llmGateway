@@ -247,9 +247,7 @@ public sealed class MainWindowViewModel : ObservableObject
             var backup = hasExistingConfiguration ? _backupService.Create(previousConfigurationName).DisplayName : string.Empty;
             var endpoint = CompatibilityMode ? UpstreamBaseUrl : CodexBaseUrl;
             Provider = EndpointNormalizer.GetConfigurationName(endpoint);
-            EnvironmentKey = CompatibilityMode
-                ? EndpointNormalizer.GetEnvironmentKey(endpoint)
-                : "OPENAI_API_KEY";
+            EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(endpoint);
             if (CompatibilityMode)
             {
                 await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
@@ -258,7 +256,8 @@ public sealed class MainWindowViewModel : ObservableObject
             else
             {
                 await _environmentService.SaveAsync("OPENAI_BASE_URL", EndpointNormalizer.Normalize(CodexBaseUrl));
-                await _environmentService.SaveAsync(EnvironmentKey, ImageApiKey);
+                await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
+                await _environmentService.SaveAsync("OPENAI_API_KEY", ImageApiKey);
             }
             await _codexConfig.SaveAsync(CurrentCodexSettings());
             await _codexStateService.SynchronizeModelProviderAsync(Provider);
@@ -498,7 +497,7 @@ public sealed class MainWindowViewModel : ObservableObject
         Model = settings.Model;
         CodexBaseUrl = EndpointNormalizer.Normalize(settings.BaseUrl);
         Provider = EndpointNormalizer.GetConfigurationName(CodexBaseUrl);
-        EnvironmentKey = settings.EnvironmentKey;
+        EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(CodexBaseUrl);
         Models.Clear();
         Models.Add(Model);
     }
