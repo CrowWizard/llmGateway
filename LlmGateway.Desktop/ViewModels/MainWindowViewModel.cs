@@ -228,12 +228,19 @@ public sealed class MainWindowViewModel : ObservableObject
             var backup = hasExistingConfiguration ? _backupService.Create(previousConfigurationName).DisplayName : string.Empty;
             var endpoint = CompatibilityMode ? UpstreamBaseUrl : CodexBaseUrl;
             Provider = EndpointNormalizer.GetConfigurationName(endpoint);
-            EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(endpoint);
+            EnvironmentKey = CompatibilityMode
+                ? EndpointNormalizer.GetEnvironmentKey(endpoint)
+                : "OPENAI_API_KEY";
             if (CompatibilityMode)
             {
                 await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
+                await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
             }
-            await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
+            else
+            {
+                await _environmentService.SaveAsync("OPENAI_BASE_URL", EndpointNormalizer.Normalize(CodexBaseUrl));
+                await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
+            }
             await _codexConfig.SaveAsync(CurrentCodexSettings());
             await _codexStateService.SynchronizeModelProviderAsync(Provider);
             var authResult = await _codexAuth.EnsureAsync();
