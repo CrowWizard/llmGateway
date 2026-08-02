@@ -17,6 +17,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly CodexStateService _codexStateService;
     private readonly EnvironmentVariableService _environmentService;
     private readonly CodexPluginService _codexPluginService;
+    private readonly CodexSkillService _codexSkillService;
     private readonly PythonRuntimeService _pythonRuntimeService;
     private readonly ModelService _modelService;
     private readonly ApplicationLauncher _launcher;
@@ -52,6 +53,7 @@ public sealed class MainWindowViewModel : ObservableObject
         CodexStateService codexStateService,
         EnvironmentVariableService environmentService,
         CodexPluginService codexPluginService,
+        CodexSkillService codexSkillService,
         PythonRuntimeService pythonRuntimeService,
         ModelService modelService,
         ApplicationLauncher launcher)
@@ -65,6 +67,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _codexStateService = codexStateService;
         _environmentService = environmentService;
         _codexPluginService = codexPluginService;
+        _codexSkillService = codexSkillService;
         _pythonRuntimeService = pythonRuntimeService;
         _modelService = modelService;
         _launcher = launcher;
@@ -81,6 +84,7 @@ public sealed class MainWindowViewModel : ObservableObject
         LaunchChatGptCommand = new AsyncCommand(LaunchChatGptAsync);
         OpenCodexDirectoryCommand = new AsyncCommand(OpenCodexDirectoryAsync);
         InstallEcommerceImageStudioCommand = new AsyncCommand(InstallEcommerceImageStudioAsync);
+        InstallImageGenAutoCommand = new AsyncCommand(InstallImageGenAutoAsync);
         EnsurePythonCommand = new AsyncCommand(EnsurePythonAsync);
         ToggleApiKeyCommand = new AsyncCommand(() =>
         {
@@ -119,6 +123,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand LaunchChatGptCommand { get; }
     public AsyncCommand OpenCodexDirectoryCommand { get; }
     public AsyncCommand InstallEcommerceImageStudioCommand { get; }
+    public AsyncCommand InstallImageGenAutoCommand { get; }
     public AsyncCommand EnsurePythonCommand { get; }
     public AsyncCommand ToggleApiKeyCommand { get; }
     public AsyncCommand ClearLogsCommand { get; }
@@ -432,6 +437,20 @@ public sealed class MainWindowViewModel : ObservableObject
         catch (Exception exception)
         {
             CodexStatus = $"安装电商生图插件失败：{exception.Message}";
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task InstallImageGenAutoAsync()
+    {
+        try
+        {
+            var installedDirectory = _codexSkillService.InstallImageGenAuto();
+            CodexStatus = $"兼容版生图 Skill 已安装到：{installedDirectory}";
+        }
+        catch (Exception exception)
+        {
+            CodexStatus = $"安装兼容版生图 Skill 失败：{exception.Message}";
         }
         return Task.CompletedTask;
     }

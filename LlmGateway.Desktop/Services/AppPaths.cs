@@ -23,6 +23,7 @@ public sealed class AppPaths
     public string StateBackupDirectory => Path.Combine(BackupDirectory, "state");
     public string CodexSkillsDirectory => Path.Combine(CodexDirectory, "skills");
     public string ImagePromptGuideDirectory => Path.Combine(ApplicationDirectory, "image-prompt-guide");
+    public string ImageGenAutoDirectory => Path.Combine(ApplicationDirectory, "imagegenauto");
     public string CodexPluginsDirectory => Path.Combine(CodexDirectory, "plugins");
     public string AgentsPluginsDirectory => Path.Combine(UserHome, ".agents", "plugins");
     public string AgentsMarketplacePath => Path.Combine(AgentsPluginsDirectory, "marketplace.json");
