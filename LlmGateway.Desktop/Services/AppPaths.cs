@@ -25,4 +25,7 @@ public sealed class AppPaths
     public string ImagePromptGuideDirectory => Path.Combine(ApplicationDirectory, "image-prompt-guide");
     public string GatewaySettingsPath => Path.Combine(ApplicationDirectory, "appsettings.json");
     public string LinuxEnvironmentPath => Path.Combine(CodexDirectory, "llm-gateway.env");
+    public string MacOsLaunchAgentsDirectory => Path.Combine(UserHome, "Library", "LaunchAgents");
+    public string MacOsEnvironmentLaunchAgentPath(string name) =>
+        Path.Combine(MacOsLaunchAgentsDirectory, $"com.llmgateway.environment.{name}.plist");
 }

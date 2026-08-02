@@ -57,6 +57,14 @@
                 <TextBlock Classes="caption" Text="Base URL" />
                 <TextBox Text="{Binding CodexBaseUrl}" IsReadOnly="True" PlaceholderText="https://api.example.com/v1" VerticalContentAlignment="Center" />
               </StackPanel>
+              <StackPanel IsVisible="{Binding IsDirectCodexMode}" Spacing="6">
+                <TextBlock Classes="caption" Text="生图 API Key" />
+                <TextBox Text="{Binding ImageApiKey}" PasswordChar="●" RevealPassword="{Binding IsApiKeyVisible}" PlaceholderText="输入可访问 gpt-image-2 的令牌" />
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                  <Button Classes="secondary" Command="{Binding ValidateImageGenerationCommand}" Content="校验生图服务" />
+                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ImageGenerationStatus}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                </Grid>
+              </StackPanel>
               <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
                 <Button Classes="secondary" Command="{Binding ToggleApiKeyCommand}" Content="显示 / 隐藏 Key" />
                 <Button Grid.Column="1" Classes="secondary" Command="{Binding FetchModelsCommand}" Content="验证并获取模型" />

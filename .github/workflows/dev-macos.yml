@@ -1,0 +1,76 @@
+name: Dev macOS Build
+
+on:
+  push:
+    branches:
+      - dev
+      - ailili
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish-macos:
+    name: Publish macOS ${{ matrix.runtime }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime:
+          - osx-arm64
+          - osx-x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore macOS runtime
+        run: dotnet restore LlmGateway.slnx -r ${{ matrix.runtime }}
+
+      - name: Publish desktop application
+        run: >-
+          dotnet publish LlmGateway.Desktop/LlmGateway.Desktop.csproj
+          -c Release
+          -r ${{ matrix.runtime }}
+          --self-contained true
+          --no-restore
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=None
+          -p:DebugSymbols=false
+          -o artifacts/LlmGateway-Desktop-${{ matrix.runtime }}
+
+      - name: Publish gateway service
+        run: >-
+          dotnet publish LlmGateway.csproj
+          -c Release
+          -r ${{ matrix.runtime }}
+          --self-contained true
+          --no-restore
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=None
+          -p:DebugSymbols=false
+          -o artifacts/LlmGateway-${{ matrix.runtime }}
+
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LlmGateway-Desktop-${{ matrix.runtime }}
+          path: artifacts/LlmGateway-Desktop-${{ matrix.runtime }}/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload gateway artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LlmGateway-${{ matrix.runtime }}
+          path: artifacts/LlmGateway-${{ matrix.runtime }}/
+          if-no-files-found: error
+          retention-days: 14

@@ -29,6 +29,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _logTraffic;
     private bool _isGatewayRunning;
     private string _apiKey = string.Empty;
+    private string _imageApiKey = string.Empty;
+    private string _imageGenerationStatus = "未校验";
     private string _model = string.Empty;
     private string _provider = string.Empty;
     private string _codexBaseUrl = string.Empty;
@@ -70,6 +72,7 @@ public sealed class MainWindowViewModel : ObservableObject
         StopGatewayCommand = _stopGatewayCommand;
         SaveConfigurationCommand = new AsyncCommand(SaveConfigurationAsync);
         FetchModelsCommand = new AsyncCommand(FetchModelsAsync);
+        ValidateImageGenerationCommand = new AsyncCommand(ValidateImageGenerationAsync);
         RestoreBackupCommand = new AsyncCommand(RestoreBackupAsync);
         RefreshBackupsCommand = new AsyncCommand(RefreshBackupsAsync);
         LaunchChatGptCommand = new AsyncCommand(LaunchChatGptAsync);
@@ -106,6 +109,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand StopGatewayCommand { get; }
     public AsyncCommand SaveConfigurationCommand { get; }
     public AsyncCommand FetchModelsCommand { get; }
+    public AsyncCommand ValidateImageGenerationCommand { get; }
     public AsyncCommand RestoreBackupCommand { get; }
     public AsyncCommand RefreshBackupsCommand { get; }
     public AsyncCommand LaunchChatGptCommand { get; }
@@ -173,6 +177,8 @@ public sealed class MainWindowViewModel : ObservableObject
     }
     public string GatewayStateText => IsGatewayRunning ? "运行中" : "已停止";
     public string ApiKey { get => _apiKey; set => SetProperty(ref _apiKey, value); }
+    public string ImageApiKey { get => _imageApiKey; set => SetProperty(ref _imageApiKey, value); }
+    public string ImageGenerationStatus { get => _imageGenerationStatus; private set => SetProperty(ref _imageGenerationStatus, value); }
     public string Model { get => _model; set => SetProperty(ref _model, value); }
     public string Provider { get => _provider; set => SetProperty(ref _provider, value); }
     public string CodexBaseUrl
@@ -209,6 +215,7 @@ public sealed class MainWindowViewModel : ObservableObject
             ApplyCodex(_codexConfig.Load());
             ApplyGateway(_gatewaySettingsService.Load());
             ApiKey = _environmentService.Read(EnvironmentKey);
+            ImageApiKey = _environmentService.Read("OPENAI_API_KEY");
             RefreshBackups();
             RefreshApplicationStatus();
             GatewayStatus = $"配置文件：{_gatewaySettingsService.SettingsPath}";
@@ -227,6 +234,10 @@ public sealed class MainWindowViewModel : ObservableObject
             if (string.IsNullOrWhiteSpace(ApiKey))
             {
                 throw new InvalidOperationException("令牌不能为空。");
+            }
+            if (!CompatibilityMode && string.IsNullOrWhiteSpace(ImageApiKey))
+            {
+                throw new InvalidOperationException("请填写生图 API Key。");
             }
 
             var hasExistingConfiguration = File.Exists(_paths.CodexConfigPath) || File.Exists(_paths.CodexAuthPath);
@@ -247,7 +258,7 @@ public sealed class MainWindowViewModel : ObservableObject
             else
             {
                 await _environmentService.SaveAsync("OPENAI_BASE_URL", EndpointNormalizer.Normalize(CodexBaseUrl));
-                await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
+                await _environmentService.SaveAsync(EnvironmentKey, ImageApiKey);
             }
             await _codexConfig.SaveAsync(CurrentCodexSettings());
             await _codexStateService.SynchronizeModelProviderAsync(Provider);
@@ -320,6 +331,22 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    private async Task ValidateImageGenerationAsync()
+    {
+        try
+        {
+            ImageGenerationStatus = "正在校验生图服务…";
+            var models = await _modelService.FetchAsync(CodexBaseUrl, ImageApiKey);
+            ImageGenerationStatus = models.Contains("gpt-image-2", StringComparer.Ordinal)
+                ? "生图可用：已获取 gpt-image-2。"
+                : "生图不可用：未获取到 gpt-image-2。";
+        }
+        catch (Exception exception)
+        {
+            ImageGenerationStatus = $"生图不可用：{exception.Message}";
+        }
+    }
+
     private Task RefreshBackupsAsync()
     {
         try
@@ -352,6 +379,7 @@ public sealed class MainWindowViewModel : ObservableObject
             ApplyCodex(_codexConfig.Load());
             await _codexStateService.SynchronizeModelProviderAsync(Provider);
             ApiKey = _environmentService.Read(EnvironmentKey);
+            ImageApiKey = _environmentService.Read("OPENAI_API_KEY");
             RefreshBackups();
             CodexStatus = $"已还原：{selected.DisplayName}";
         }
@@ -470,7 +498,7 @@ public sealed class MainWindowViewModel : ObservableObject
         Model = settings.Model;
         CodexBaseUrl = EndpointNormalizer.Normalize(settings.BaseUrl);
         Provider = EndpointNormalizer.GetConfigurationName(CodexBaseUrl);
-        EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(CodexBaseUrl);
+        EnvironmentKey = settings.EnvironmentKey;
         Models.Clear();
         Models.Add(Model);
     }

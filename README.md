@@ -28,6 +28,8 @@ Codex / 其他客户端
 开发运行桌面界面：`dotnet run --project LlmGateway.Desktop/LlmGateway.Desktop.csproj`。
 Windows 会把 Key 写入当前用户环境变量；Linux 会写入 `~/.codex/llm-gateway.env` 并同步到桌面进程环境。Store/MSIX 检测仅在 Windows 上启用，通过开始菜单应用清单和 AppModel 注册表定位 AUMID。
 
+macOS 会将变量写入 `~/.codex/llm-gateway.env`，同时通过 `launchctl setenv` 更新当前登录会话，并在 `~/Library/LaunchAgents/` 创建用户 LaunchAgent，以便下次登录后新启动的 GUI 客户端也能读取。不会修改 `~/.zshrc`。
+
 `dev` 分支推送会触发 `.github/workflows/dev-windows.yml`，仅在 Windows runner 发布 `win-x64` 桌面版和网关版产物，不生成 Linux 版本。
 
 ## 环境要求

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Security;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
@@ -44,7 +46,74 @@ public sealed class EnvironmentVariableService(AppPaths paths)
         }
 
         Environment.SetEnvironmentVariable(name, value);
-        await AtomicFile.WriteUtf8Async(paths.LinuxEnvironmentPath, $"{name}={value}{Environment.NewLine}", cancellationToken);
+        var variables = ReadStoredVariables();
+        variables[name] = value;
+        var content = string.Join(Environment.NewLine, variables.Select(pair => $"{pair.Key}={pair.Value}")) + Environment.NewLine;
+        await AtomicFile.WriteUtf8Async(paths.LinuxEnvironmentPath, content, cancellationToken);
+
+        if (OperatingSystem.IsMacOS())
+        {
+            await AtomicFile.WriteUtf8Async(
+                paths.MacOsEnvironmentLaunchAgentPath(name),
+                CreateLaunchAgent(name, value),
+                cancellationToken);
+            File.SetUnixFileMode(paths.MacOsEnvironmentLaunchAgentPath(name), UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            await SetMacOsEnvironmentVariableAsync(name, value, cancellationToken);
+        }
+    }
+
+    private Dictionary<string, string> ReadStoredVariables()
+    {
+        if (!File.Exists(paths.LinuxEnvironmentPath))
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        return File.ReadLines(paths.LinuxEnvironmentPath)
+            .Select(line => line.Split('=', 2))
+            .Where(parts => parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]))
+            .ToDictionary(parts => parts[0], parts => parts[1], StringComparer.Ordinal);
+    }
+
+    private static string CreateLaunchAgent(string name, string value)
+    {
+        var escapedName = SecurityElement.Escape(name) ?? string.Empty;
+        var escapedValue = SecurityElement.Escape(value) ?? string.Empty;
+                return string.Join(Environment.NewLine,
+                [
+                        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+                        "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">",
+                        "<plist version=\"1.0\">",
+                        "<dict>",
+                        "  <key>Label</key>",
+                        $"  <string>com.llmgateway.environment.{escapedName}</string>",
+                        "  <key>ProgramArguments</key>",
+                        "  <array>",
+                        "    <string>/bin/launchctl</string>",
+                        "    <string>setenv</string>",
+                        $"    <string>{escapedName}</string>",
+                        $"    <string>{escapedValue}</string>",
+                        "  </array>",
+                        "  <key>RunAtLoad</key>",
+                        "  <true/>",
+                        "</dict>",
+                        "</plist>",
+                        string.Empty
+                ]);
+    }
+
+    private static async Task SetMacOsEnvironmentVariableAsync(string name, string value, CancellationToken cancellationToken)
+    {
+        using var process = Process.Start(new ProcessStartInfo("/bin/launchctl")
+        {
+            ArgumentList = { "setenv", name, value },
+            UseShellExecute = false
+        }) ?? throw new InvalidOperationException("无法启动 launchctl。");
+        await process.WaitForExitAsync(cancellationToken);
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"launchctl setenv 失败，退出代码：{process.ExitCode}。");
+        }
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
