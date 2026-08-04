@@ -23,6 +23,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly ApplicationLauncher _launcher;
     private readonly CodexLocalizationService _localizationService;
     private readonly ChatGptInstallerService _chatGptInstallerService;
+    private readonly NodeRuntimeService _nodeRuntimeService;
     private readonly AsyncCommand _startGatewayCommand;
     private readonly AsyncCommand _stopGatewayCommand;
 
@@ -60,7 +61,8 @@ public sealed class MainWindowViewModel : ObservableObject
         ModelService modelService,
         ApplicationLauncher launcher,
         CodexLocalizationService localizationService,
-        ChatGptInstallerService chatGptInstallerService)
+        ChatGptInstallerService chatGptInstallerService,
+        NodeRuntimeService nodeRuntimeService)
     {
         _paths = paths;
         _gatewaySettingsService = gatewaySettingsService;
@@ -77,6 +79,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _launcher = launcher;
         _localizationService = localizationService;
         _chatGptInstallerService = chatGptInstallerService;
+        _nodeRuntimeService = nodeRuntimeService;
 
         _startGatewayCommand = new AsyncCommand(StartGatewayAsync, () => !IsGatewayRunning);
         _stopGatewayCommand = new AsyncCommand(StopGatewayAsync, () => IsGatewayRunning);
@@ -93,6 +96,7 @@ public sealed class MainWindowViewModel : ObservableObject
         InstallEcommerceImageStudioCommand = new AsyncCommand(InstallEcommerceImageStudioAsync);
         InstallImageGenAutoCommand = new AsyncCommand(InstallImageGenAutoAsync);
         EnsurePythonCommand = new AsyncCommand(EnsurePythonAsync);
+        EnsureNodeCommand = new AsyncCommand(EnsureNodeAsync);
         EnableChineseLocalizationCommand = new AsyncCommand(EnableChineseLocalizationAsync);
         ToggleApiKeyCommand = new AsyncCommand(() =>
         {
@@ -134,6 +138,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand InstallEcommerceImageStudioCommand { get; }
     public AsyncCommand InstallImageGenAutoCommand { get; }
     public AsyncCommand EnsurePythonCommand { get; }
+    public AsyncCommand EnsureNodeCommand { get; }
     public AsyncCommand EnableChineseLocalizationCommand { get; }
     public AsyncCommand ToggleApiKeyCommand { get; }
     public AsyncCommand ClearLogsCommand { get; }
@@ -490,6 +495,19 @@ public sealed class MainWindowViewModel : ObservableObject
         catch (Exception exception)
         {
             CodexStatus = $"Python 处理失败：{exception.Message}";
+        }
+    }
+
+    private async Task EnsureNodeAsync()
+    {
+        try
+        {
+            CodexStatus = "正在检测 Node.js 环境…";
+            CodexStatus = await _nodeRuntimeService.EnsureNodeAsync();
+        }
+        catch (Exception exception)
+        {
+            CodexStatus = $"Node.js 处理失败：{exception.Message}";
         }
     }
 

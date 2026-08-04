@@ -32,7 +32,8 @@ public sealed partial class App : Application
                 new ModelService(),
                 new ApplicationLauncher(),
                 new CodexLocalizationService(),
-                new ChatGptInstallerService());
+                new ChatGptInstallerService(),
+                new NodeRuntimeService());
 
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
             desktop.ShutdownRequested += async (_, _) => await gatewayHost.StopAsync();

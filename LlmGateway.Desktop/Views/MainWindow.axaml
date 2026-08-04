@@ -172,12 +172,13 @@
             <StackPanel Spacing="14">
               <StackPanel Spacing="4">
                 <TextBlock Classes="section-title" Text="安装组件" />
-                <TextBlock Classes="caption" Text="安装电商插件、兼容版生图 Skill 与所需的 Python 运行环境。" TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="安装电商插件、兼容版生图 Skill 及其 Python、Node.js 运行环境。" TextWrapping="Wrap" />
               </StackPanel>
-              <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+              <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
                 <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallEcommerceImageStudioCommand}" Content="安装电商生图插件" />
                 <Button Grid.Column="1" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallImageGenAutoCommand}" Content="安装兼容版生图 Skill" />
                 <Button Grid.Column="2" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding EnsurePythonCommand}" Content="检测 / 安装 Python 3.14.6" />
+                <Button Grid.Column="3" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding EnsureNodeCommand}" Content="检测 / 安装 Node.js 22.22.3" />
               </Grid>
               <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                 <Button Classes="secondary" Command="{Binding EnableChineseLocalizationCommand}" Content="启用 Codex 界面汉化" />
