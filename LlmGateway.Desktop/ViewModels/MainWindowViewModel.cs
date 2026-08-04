@@ -452,32 +452,32 @@ public sealed class MainWindowViewModel : ObservableObject
         return Task.CompletedTask;
     }
 
-    private Task InstallEcommerceImageStudioAsync()
+    private async Task InstallEcommerceImageStudioAsync()
     {
         try
         {
-            var installedDirectory = _codexPluginService.InstallEcommerceImageStudio();
+            CodexStatus = "正在安装电商生图插件…";
+            var installedDirectory = await _codexPluginService.InstallEcommerceImageStudioAsync();
             CodexStatus = $"电商生图插件已安装到：{installedDirectory}";
         }
         catch (Exception exception)
         {
             CodexStatus = $"安装电商生图插件失败：{exception.Message}";
         }
-        return Task.CompletedTask;
     }
 
-    private Task InstallImageGenAutoAsync()
+    private async Task InstallImageGenAutoAsync()
     {
         try
         {
-            var installedDirectory = _codexSkillService.InstallImageGenAuto();
+            CodexStatus = "正在安装兼容版生图 Skill…";
+            var installedDirectory = await _codexSkillService.InstallImageGenAutoAsync();
             CodexStatus = $"兼容版生图 Skill 已安装到：{installedDirectory}";
         }
         catch (Exception exception)
         {
             CodexStatus = $"安装兼容版生图 Skill 失败：{exception.Message}";
         }
-        return Task.CompletedTask;
     }
 
     private async Task EnsurePythonAsync()

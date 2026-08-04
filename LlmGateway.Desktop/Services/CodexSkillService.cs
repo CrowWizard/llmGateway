@@ -2,7 +2,7 @@ namespace LlmGateway.Desktop.Services;
 
 public sealed class CodexSkillService(AppPaths paths)
 {
-    public string InstallImageGenAuto()
+    public Task<string> InstallImageGenAutoAsync()
     {
         var sourceDirectory = paths.ImageGenAutoDirectory;
         var sourceSkillFile = Path.Combine(sourceDirectory, "SKILL.md");
@@ -12,14 +12,6 @@ public sealed class CodexSkillService(AppPaths paths)
         }
 
         var targetDirectory = Path.Combine(paths.CodexSkillsDirectory, "imagegenauto");
-        foreach (var sourceFile in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
-        {
-            var relativePath = Path.GetRelativePath(sourceDirectory, sourceFile);
-            var targetFile = Path.Combine(targetDirectory, relativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(targetFile)!);
-            File.Copy(sourceFile, targetFile, true);
-        }
-
-        return targetDirectory;
+        return CodexContentInstaller.InstallAsync(sourceDirectory, targetDirectory, paths.CodexTemporaryDirectory);
     }
 }

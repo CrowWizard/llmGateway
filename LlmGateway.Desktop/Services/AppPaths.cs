@@ -21,6 +21,7 @@ public sealed class AppPaths
     public string CodexStateDatabasePath => Path.Combine(CodexDirectory, "state_5.sqlite");
     public string BackupDirectory => Path.Combine(CodexDirectory, "bak");
     public string StateBackupDirectory => Path.Combine(BackupDirectory, "state");
+    public string CodexTemporaryDirectory => Path.Combine(CodexDirectory, "temp");
     public string CodexSkillsDirectory => Path.Combine(CodexDirectory, "skills");
     public string ImagePromptGuideDirectory => Path.Combine(ApplicationDirectory, "image-prompt-guide");
     public string ImageGenAutoDirectory => Path.Combine(ApplicationDirectory, "imagegenauto");
