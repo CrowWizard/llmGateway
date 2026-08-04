@@ -45,6 +45,12 @@ For a marketplace image set, plan the requested number of outputs before generat
 3. For edits, supply the original product image and state exactly what must stay unchanged: product geometry, colorway, logo, text, and included accessories.
 4. Inspect every output. Regenerate or edit if it distorts the product, invents accessories, alters branding, adds unreadable text, creates unsafe use, or makes unsupported claims.
 
+## Tool Availability
+
+- Treat `image_generate` and `image_edit` as plugin-provided MCP tools. Do not state that image editing is unavailable merely because a generic built-in image tool is absent.
+- If the plugin tools are not present in the active task, explain that the plugin must be reloaded and ask the user to start a new Codex task after reinstalling or enabling the plugin. Do not substitute a claim that the current environment cannot generate images.
+- Call `health_check` before reporting a provider-configuration problem. The image tools automatically retry `gpt-image-1.5` only after an explicit `gpt-image-2` model-unavailable response, and report that fallback in their output.
+
 ## Prompt Pattern
 
 Write prompts in this order: product identity, non-negotiable visual details, composition, background or scene, lighting, camera angle, desired aspect ratio, and exclusions.

@@ -24,7 +24,7 @@ When `EIS_PROVIDER_*` is absent, set `OPENAI_API_KEY` and optionally `OPENAI_BAS
 1. Call `health_check` before a production batch. It verifies local provider configuration without generating an image.
 2. Pass `output_path` to `image_generate` or `image_edit` to save the returned PNG locally as well as displaying it in Codex.
 3. Use `input_fidelity: "high"` with `gpt-image-1.5` edits when preserving a supplied product is critical. Omit it for `gpt-image-2`, which already preserves inputs at high fidelity.
-4. If the provider returns a `503` for `gpt-image-2`, the tool tells Codex to request the user's confirmation before retrying with `gpt-image-1.5`. It never silently downgrades.
+4. If `gpt-image-2` returns an explicit model-unavailable response (`model_not_found` or `no available channel for model`), the tool automatically retries once with `gpt-image-1.5` and reports the fallback in the result. It does not retry other provider, authentication, rate-limit, or network errors.
 5. `gpt-image-2` transparent output is rejected before the API call. Confirm with the user before explicitly using `gpt-image-1.5` plus `background: "transparent"`.
 
 ## Validate

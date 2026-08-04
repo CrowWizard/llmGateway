@@ -28,7 +28,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-    <Content Include="../ecommerce-image-studio/0.2.0/**" Link="ecommerce-image-studio/0.2.0/%(RecursiveDir)%(Filename)%(Extension)">
+    <Content Include="../ecommerce-image-studio/1.0.0/**" Link="ecommerce-image-studio/1.0.0/%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

@@ -21,6 +21,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly PythonRuntimeService _pythonRuntimeService;
     private readonly ModelService _modelService;
     private readonly ApplicationLauncher _launcher;
+    private readonly CodexLocalizationService _localizationService;
+    private readonly ChatGptInstallerService _chatGptInstallerService;
     private readonly AsyncCommand _startGatewayCommand;
     private readonly AsyncCommand _stopGatewayCommand;
 
@@ -56,7 +58,9 @@ public sealed class MainWindowViewModel : ObservableObject
         CodexSkillService codexSkillService,
         PythonRuntimeService pythonRuntimeService,
         ModelService modelService,
-        ApplicationLauncher launcher)
+        ApplicationLauncher launcher,
+        CodexLocalizationService localizationService,
+        ChatGptInstallerService chatGptInstallerService)
     {
         _paths = paths;
         _gatewaySettingsService = gatewaySettingsService;
@@ -71,6 +75,8 @@ public sealed class MainWindowViewModel : ObservableObject
         _pythonRuntimeService = pythonRuntimeService;
         _modelService = modelService;
         _launcher = launcher;
+        _localizationService = localizationService;
+        _chatGptInstallerService = chatGptInstallerService;
 
         _startGatewayCommand = new AsyncCommand(StartGatewayAsync, () => !IsGatewayRunning);
         _stopGatewayCommand = new AsyncCommand(StopGatewayAsync, () => IsGatewayRunning);
@@ -82,10 +88,12 @@ public sealed class MainWindowViewModel : ObservableObject
         RestoreBackupCommand = new AsyncCommand(RestoreBackupAsync);
         RefreshBackupsCommand = new AsyncCommand(RefreshBackupsAsync);
         LaunchChatGptCommand = new AsyncCommand(LaunchChatGptAsync);
+        InstallChatGptCommand = new AsyncCommand(InstallChatGptAsync);
         OpenCodexDirectoryCommand = new AsyncCommand(OpenCodexDirectoryAsync);
         InstallEcommerceImageStudioCommand = new AsyncCommand(InstallEcommerceImageStudioAsync);
         InstallImageGenAutoCommand = new AsyncCommand(InstallImageGenAutoAsync);
         EnsurePythonCommand = new AsyncCommand(EnsurePythonAsync);
+        EnableChineseLocalizationCommand = new AsyncCommand(EnableChineseLocalizationAsync);
         ToggleApiKeyCommand = new AsyncCommand(() =>
         {
             IsApiKeyVisible = !IsApiKeyVisible;
@@ -121,10 +129,12 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand RestoreBackupCommand { get; }
     public AsyncCommand RefreshBackupsCommand { get; }
     public AsyncCommand LaunchChatGptCommand { get; }
+    public AsyncCommand InstallChatGptCommand { get; }
     public AsyncCommand OpenCodexDirectoryCommand { get; }
     public AsyncCommand InstallEcommerceImageStudioCommand { get; }
     public AsyncCommand InstallImageGenAutoCommand { get; }
     public AsyncCommand EnsurePythonCommand { get; }
+    public AsyncCommand EnableChineseLocalizationCommand { get; }
     public AsyncCommand ToggleApiKeyCommand { get; }
     public AsyncCommand ClearLogsCommand { get; }
 
@@ -414,6 +424,21 @@ public sealed class MainWindowViewModel : ObservableObject
         return Task.CompletedTask;
     }
 
+    private async Task InstallChatGptAsync()
+    {
+        try
+        {
+            ApplicationStatus = "正在检查 winget 并安装 ChatGPT…";
+            var installResult = await _chatGptInstallerService.InstallAsync();
+            var chatGpt = _launcher.DetectChatGpt();
+            ApplicationStatus = $"{installResult} 当前检测：{chatGpt.Description}";
+        }
+        catch (Exception exception)
+        {
+            ApplicationStatus = $"安装 ChatGPT 失败：{exception.Message}";
+        }
+    }
+
     private Task OpenCodexDirectoryAsync()
     {
         try
@@ -465,6 +490,22 @@ public sealed class MainWindowViewModel : ObservableObject
         catch (Exception exception)
         {
             CodexStatus = $"Python 处理失败：{exception.Message}";
+        }
+    }
+
+    private async Task EnableChineseLocalizationAsync()
+    {
+        try
+        {
+            CodexStatus = "正在定位 Codex 的 app.asar…";
+            var appAsarPath = _localizationService.FindAppAsarPath();
+            await _launcher.CloseManagedClientsAsync();
+            var result = _localizationService.EnableChinese(appAsarPath);
+            CodexStatus = $"{result.Message} 路径：{result.AppAsarPath}";
+        }
+        catch (Exception exception)
+        {
+            CodexStatus = $"启用界面汉化失败：{exception.Message}";
         }
     }
 

@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../LlmGateway.csproj" />
+    <Compile Include="../LlmGateway.Desktop/Services/CodexLocalizationService.cs" Link="Services/CodexLocalizationService.cs" />
   </ItemGroup>
 
 </Project>

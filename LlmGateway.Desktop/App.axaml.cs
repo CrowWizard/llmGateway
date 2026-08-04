@@ -30,7 +30,9 @@ public sealed partial class App : Application
                 new CodexSkillService(paths),
                 new PythonRuntimeService(),
                 new ModelService(),
-                new ApplicationLauncher());
+                new ApplicationLauncher(),
+                new CodexLocalizationService(),
+                new ChatGptInstallerService());
 
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
             desktop.ShutdownRequested += async (_, _) => await gatewayHost.StopAsync();

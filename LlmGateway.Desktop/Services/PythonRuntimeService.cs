@@ -7,7 +7,8 @@ namespace LlmGateway.Desktop.Services;
 public sealed class PythonRuntimeService
 {
     private const string PythonVersion = "3.14.6";
-    private const string InstallerUrl = "https://mirrors.aliyun.com/python-release/windows/python-3.14.6-amd64.exe";
+    private const string WindowsInstallerUrl = "https://mirrors.aliyun.com/python-release/windows/python-3.14.6-amd64.exe";
+    private const string MacOsInstallerUrl = "https://mirrors.aliyun.com/python-release/macos/python-3.14.6-macos11.pkg";
     private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromMinutes(10) };
 
     public async Task<string> EnsurePythonAsync()
@@ -18,15 +19,20 @@ public sealed class PythonRuntimeService
             return $"已检测到 Python：{existing}";
         }
 
+        if (OperatingSystem.IsMacOS())
+        {
+            return await DownloadAndOpenMacOsInstallerAsync();
+        }
+
         if (!OperatingSystem.IsWindows())
         {
-            throw new PlatformNotSupportedException("Python 自动安装目前仅支持 Windows。");
+            throw new PlatformNotSupportedException("Python 自动安装目前仅支持 Windows 和 macOS。");
         }
 
         var installerPath = Path.Combine(Path.GetTempPath(), $"python-{PythonVersion}-amd64.exe");
         try
         {
-            await using (var responseStream = await _httpClient.GetStreamAsync(InstallerUrl))
+            await using (var responseStream = await _httpClient.GetStreamAsync(WindowsInstallerUrl))
             await using (var installerStream = File.Create(installerPath))
             {
                 await responseStream.CopyToAsync(installerStream);
@@ -67,6 +73,32 @@ public sealed class PythonRuntimeService
             {
             }
         }
+    }
+
+    private async Task<string> DownloadAndOpenMacOsInstallerAsync()
+    {
+        var installerPath = Path.Combine(Path.GetTempPath(), $"python-{PythonVersion}-macos11.pkg");
+        await using (var responseStream = await _httpClient.GetStreamAsync(MacOsInstallerUrl))
+        await using (var installerStream = File.Create(installerPath))
+        {
+            await responseStream.CopyToAsync(installerStream);
+        }
+
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = "open",
+            ArgumentList = { installerPath },
+            UseShellExecute = false,
+            CreateNoWindow = true
+        }) ?? throw new InvalidOperationException("无法打开 macOS Python 安装包。");
+
+        await process.WaitForExitAsync();
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"无法打开 Python 安装包（退出码 {process.ExitCode}）。");
+        }
+
+        return "已打开 Python 3.14.6 安装器。请在系统安装器中完成授权和安装，然后重新启动应用。";
     }
 
     private static async Task<string?> FindPythonAsync()

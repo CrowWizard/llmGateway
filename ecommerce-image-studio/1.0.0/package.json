@@ -1,6 +1,6 @@
 {
   "name": "ecommerce-image-studio",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Dependency-free MCP image tools for ecommerce image workflows.",
   "type": "module",

@@ -55,7 +55,7 @@
               </Grid>
               <StackPanel IsVisible="{Binding IsDirectCodexMode}" Spacing="6">
                 <TextBlock Classes="caption" Text="Base URL" />
-                <TextBox Text="{Binding CodexBaseUrl}" IsReadOnly="True" PlaceholderText="https://api.example.com/v1" VerticalContentAlignment="Center" />
+                <TextBox Text="{Binding CodexBaseUrl}" PlaceholderText="https://api.example.com/v1" VerticalContentAlignment="Center" />
               </StackPanel>
               <StackPanel IsVisible="{Binding IsDirectCodexMode}" Spacing="6">
                 <TextBlock Classes="caption" Text="生图 API Key" />
@@ -161,6 +161,7 @@
                 </StackPanel>
                 <StackPanel Spacing="8">
                   <Button HorizontalAlignment="Stretch" Classes="primary" Command="{Binding LaunchChatGptCommand}" Content="启动 ChatGPT" />
+                  <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallChatGptCommand}" Content="安装 ChatGPT" />
                   <TextBlock Classes="caption" Text="{Binding ApplicationStatus}" TextWrapping="Wrap" />
                 </StackPanel>
               </StackPanel>
@@ -177,6 +178,10 @@
                 <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallEcommerceImageStudioCommand}" Content="安装电商生图插件" />
                 <Button Grid.Column="1" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallImageGenAutoCommand}" Content="安装兼容版生图 Skill" />
                 <Button Grid.Column="2" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding EnsurePythonCommand}" Content="检测 / 安装 Python 3.14.6" />
+              </Grid>
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                <Button Classes="secondary" Command="{Binding EnableChineseLocalizationCommand}" Content="启用 Codex 界面汉化" />
+                <TextBlock Grid.Column="1" Classes="caption" Text="自动定位 app.asar，首次修改会创建 .bak 备份；会先关闭运行中的 Codex/ChatGPT。" TextWrapping="Wrap" VerticalAlignment="Center" />
               </Grid>
             </StackPanel>
           </Border>

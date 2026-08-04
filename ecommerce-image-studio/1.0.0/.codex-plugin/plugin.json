@@ -1,6 +1,6 @@
 {
   "name": "ecommerce-image-studio",
-  "version": "0.2.0+codex.20260802100909",
+  "version": "1.0.0+codex.20260802103722",
   "description": "Generate and edit ecommerce product images with a configured image provider.",
   "author": {
     "name": "Local developer"

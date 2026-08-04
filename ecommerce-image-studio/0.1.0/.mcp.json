@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "ecommerce-image-studio": {
-      "command": "node",
-      "args": ["${CODEX_PLUGIN_ROOT}/scripts/image-mcp-server.mjs"]
-    }
-  }
-}
