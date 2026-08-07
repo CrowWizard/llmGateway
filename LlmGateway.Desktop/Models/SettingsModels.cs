@@ -27,7 +27,7 @@ public sealed class GatewaySettings
 
 public sealed class CodexSettings
 {
-    public string Model { get; set; } = "kaka-5.5";
+    public string Model { get; set; } = string.Empty;
     public string Provider { get; set; } = "dzdy";
     public string BaseUrl { get; set; } = "https://api.ailili.chat/v1";
     public string EnvironmentKey { get; set; } = "DZDY_API_KEY";

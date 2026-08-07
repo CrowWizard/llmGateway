@@ -111,7 +111,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="1" Spacing="6">
                   <TextBlock Classes="caption" Text="生图模型" />
-                  <ComboBox ItemsSource="{Binding ImageModels}" SelectedItem="{Binding ImageModel}" IsEditable="True" PlaceholderText="获取或输入模型 ID" />
+                  <ComboBox ItemsSource="{Binding ImageModels}" SelectedItem="{Binding ImageModel}" Text="{Binding ImageModel}" IsEditable="True" PlaceholderText="获取或输入模型 ID" />
                 </StackPanel>
               </Grid>
               <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
