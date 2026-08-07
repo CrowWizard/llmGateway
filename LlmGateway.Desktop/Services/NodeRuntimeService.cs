@@ -35,11 +35,7 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
         try
         {
             Directory.CreateDirectory(paths.CodexTemporaryDirectory);
-            await using (var responseStream = await _httpClient.GetStreamAsync(platform.Url))
-            await using (var archiveStream = File.Create(archivePath))
-            {
-                await responseStream.CopyToAsync(archiveStream);
-            }
+            await DownloadArchiveAsync(platform, archivePath);
 
             ZipFile.ExtractToDirectory(archivePath, extractDirectory);
             var extractedRoot = Directory.EnumerateDirectories(extractDirectory).Single();
@@ -77,6 +73,32 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
         }
 
         await CodexContentInstaller.InstallAsync(paths.NodeRuntimeSourceDirectory, paths.NodeRuntimeSkillDirectory, paths.CodexTemporaryDirectory);
+    }
+
+    private async Task DownloadArchiveAsync(PlatformPackage platform, string archivePath)
+    {
+        var failures = new List<string>();
+        foreach (var url in platform.Urls)
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.UserAgent.ParseAdd("LlmGateway/1.0");
+                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+                await using var responseStream = await response.Content.ReadAsStreamAsync();
+                await using var archiveStream = File.Create(archivePath);
+                await responseStream.CopyToAsync(archiveStream);
+                return;
+            }
+            catch (Exception exception) when (exception is HttpRequestException or IOException)
+            {
+                TryDeleteFile(archivePath);
+                failures.Add($"{url}：{exception.Message}");
+            }
+        }
+
+        throw new HttpRequestException($"Node.js 压缩包下载失败，已尝试 {failures.Count} 个下载源：{string.Join("；", failures)}");
     }
 
     private async Task InstallSharedPackagesAsync(string nodePath, string targetDirectory)
@@ -132,7 +154,7 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
             version,
             rid = GetRuntimeIdentifier(),
             executable = Path.GetRelativePath(paths.NodeRuntimeSkillDirectory, GetManagedNodePath()),
-            source = platform.Url,
+            source = platform.Urls[0],
             fallback = "system-node"
         }, new JsonSerializerOptions { WriteIndented = true });
         await File.WriteAllTextAsync(Path.Combine(paths.NodeRuntimeSkillDirectory, "runtime.json"), manifest + Environment.NewLine);
@@ -142,7 +164,12 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
     {
         const string archiveName = $"node-v{NodeVersion}-win-x64.zip";
         return OperatingSystem.IsWindows() && Environment.Is64BitOperatingSystem
-            ? new PlatformPackage(archiveName, $"https://mirrors.aliyun.com/nodejs-release/v{NodeVersion}/{archiveName}")
+            ? new PlatformPackage(archiveName,
+            [
+                $"https://mirrors.aliyun.com/nodejs-release/v{NodeVersion}/{archiveName}",
+                $"https://cdn.npmmirror.com/binaries/node/v{NodeVersion}/{archiveName}",
+                $"https://nodejs.org/dist/v{NodeVersion}/{archiveName}"
+            ])
             : null;
     }
 
@@ -202,5 +229,5 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
         try { if (Directory.Exists(path)) Directory.Delete(path, true); } catch (IOException) { }
     }
 
-    private sealed record PlatformPackage(string ArchiveName, string Url);
+    private sealed record PlatformPackage(string ArchiveName, IReadOnlyList<string> Urls);
 }
