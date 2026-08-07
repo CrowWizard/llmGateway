@@ -1,8 +1,8 @@
 # Image API quick reference
 
-This file is for the fallback CLI mode only. Use it when the user explicitly asks to use `scripts/image_gen.py` / CLI / API / model controls, or after the user explicitly confirms that a transparent-output request should use the `gpt-image-1.5` true-transparency fallback path.
+Use this file for API and model controls supported by the bundled `scripts/image_gen.mjs` CLI.
 
-These parameters describe the Image API and bundled CLI fallback surface. Do not assume they are normal arguments on the built-in `image_gen` tool.
+These parameters describe the Image API and bundled Node CLI surface.
 
 ## Scope
 - This fallback CLI is intended for GPT Image models (`gpt-image-2`, `gpt-image-1.5`, `gpt-image-1`, and `gpt-image-1-mini`).
@@ -68,13 +68,13 @@ Model-specific note for `input_fidelity`:
 
 ## Transparent backgrounds
 
-`gpt-image-2` does not currently support the Image API `background=transparent` parameter. The skill's default transparent-image path is built-in `image_gen` with a flat chroma-key background, followed by local alpha extraction with `python "${CODEX_HOME:-$HOME/.codex}/skills/.system/imagegen/scripts/remove_chroma_key.py"`.
+`gpt-image-2` does not currently support the Image API `background=transparent` parameter. Generate a flat chroma-key background, then extract alpha with `%USERPROFILE%\.codex\skills\noderuntime\scripts\run-node.cmd "%USERPROFILE%\.codex\skills\imagegenauto\scripts\remove_chroma_key.mjs"`.
 
-Use CLI `gpt-image-1.5` with `background=transparent` and a transparent-capable output format such as `png` or `webp` only after the user explicitly confirms that fallback, unless they already requested `gpt-image-1.5`, `scripts/image_gen.py`, or CLI fallback. If the user asks for true/native transparency, the subject is too complex for clean chroma-key removal, or local background removal fails validation, explain the tradeoff and ask before switching.
+Use `gpt-image-1.5` with `background=transparent` and a transparent-capable output format such as `png` or `webp` when native transparency is required. This is preferable for subjects that are too complex for clean chroma-key removal, such as hair, glass, smoke, liquids, or soft shadows.
 
 ## Output
 - `data[]` list with `b64_json` per image
-- The bundled `scripts/image_gen.py` CLI decodes `b64_json` and writes output files for you.
+- The bundled `scripts/image_gen.mjs` CLI decodes `b64_json` and writes output files for you.
 
 ## Limits and notes
 - Input images and masks must be under 50MB.
@@ -86,5 +86,4 @@ Use CLI `gpt-image-1.5` with `background=transparent` and a transparent-capable 
 - If a request fails because a specific option is unsupported by the selected GPT Image model, retry manually without that option only when the option is not required by the user. If true transparent CLI output is required, ask before switching to `gpt-image-1.5` instead of dropping `background=transparent`, unless the user already explicitly chose that fallback.
 
 ## Important boundary
-- `quality`, `input_fidelity`, explicit masks, `background`, `output_format`, and related parameters are fallback-only execution controls.
-- Do not assume they are built-in `image_gen` tool arguments.
+- `quality`, `input_fidelity`, explicit masks, `background`, `output_format`, and related parameters are CLI execution controls.

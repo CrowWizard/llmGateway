@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Ecommerce Image Studio">
+  <rect width="64" height="64" rx="12" fill="#F4F1E8"/>
+  <path d="M14 21h36v30H14z" fill="#FFFFFF" stroke="#172121" stroke-width="3"/>
+  <path d="M23 21c0-6 3-10 9-10s9 4 9 10" fill="none" stroke="#172121" stroke-width="3" stroke-linecap="round"/>
+  <path d="M20 44l8-9 6 6 5-5 7 8z" fill="#DD5F45"/>
+  <circle cx="42" cy="29" r="4" fill="#2D7D74"/>
+</svg>

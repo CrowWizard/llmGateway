@@ -16,13 +16,11 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly CodexBackupService _backupService;
     private readonly CodexStateService _codexStateService;
     private readonly EnvironmentVariableService _environmentService;
-    private readonly CodexPluginService _codexPluginService;
+    private readonly EcommerceImageStudioSkillService _ecommerceImageStudioSkillService;
     private readonly CodexSkillService _codexSkillService;
-    private readonly PythonRuntimeService _pythonRuntimeService;
     private readonly ModelService _modelService;
     private readonly ApplicationLauncher _launcher;
     private readonly CodexLocalizationService _localizationService;
-    private readonly ChatGptInstallerService _chatGptInstallerService;
     private readonly NodeRuntimeService _nodeRuntimeService;
     private readonly AsyncCommand _startGatewayCommand;
     private readonly AsyncCommand _stopGatewayCommand;
@@ -36,6 +34,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _apiKey = string.Empty;
     private string _imageApiKey = string.Empty;
     private string _imageGenerationStatus = "未校验";
+    private string _imageModel = string.Empty;
     private string _model = string.Empty;
     private string _provider = string.Empty;
     private string _codexBaseUrl = string.Empty;
@@ -55,13 +54,11 @@ public sealed class MainWindowViewModel : ObservableObject
         CodexBackupService backupService,
         CodexStateService codexStateService,
         EnvironmentVariableService environmentService,
-        CodexPluginService codexPluginService,
+        EcommerceImageStudioSkillService ecommerceImageStudioSkillService,
         CodexSkillService codexSkillService,
-        PythonRuntimeService pythonRuntimeService,
         ModelService modelService,
         ApplicationLauncher launcher,
         CodexLocalizationService localizationService,
-        ChatGptInstallerService chatGptInstallerService,
         NodeRuntimeService nodeRuntimeService)
     {
         _paths = paths;
@@ -72,13 +69,11 @@ public sealed class MainWindowViewModel : ObservableObject
         _backupService = backupService;
         _codexStateService = codexStateService;
         _environmentService = environmentService;
-        _codexPluginService = codexPluginService;
+        _ecommerceImageStudioSkillService = ecommerceImageStudioSkillService;
         _codexSkillService = codexSkillService;
-        _pythonRuntimeService = pythonRuntimeService;
         _modelService = modelService;
         _launcher = launcher;
         _localizationService = localizationService;
-        _chatGptInstallerService = chatGptInstallerService;
         _nodeRuntimeService = nodeRuntimeService;
 
         _startGatewayCommand = new AsyncCommand(StartGatewayAsync, () => !IsGatewayRunning);
@@ -87,15 +82,13 @@ public sealed class MainWindowViewModel : ObservableObject
         StopGatewayCommand = _stopGatewayCommand;
         SaveConfigurationCommand = new AsyncCommand(SaveConfigurationAsync);
         FetchModelsCommand = new AsyncCommand(FetchModelsAsync);
-        ValidateImageGenerationCommand = new AsyncCommand(ValidateImageGenerationAsync);
+        FetchImageModelsCommand = new AsyncCommand(FetchImageModelsAsync);
         RestoreBackupCommand = new AsyncCommand(RestoreBackupAsync);
         RefreshBackupsCommand = new AsyncCommand(RefreshBackupsAsync);
         LaunchChatGptCommand = new AsyncCommand(LaunchChatGptAsync);
-        InstallChatGptCommand = new AsyncCommand(InstallChatGptAsync);
         OpenCodexDirectoryCommand = new AsyncCommand(OpenCodexDirectoryAsync);
         InstallEcommerceImageStudioCommand = new AsyncCommand(InstallEcommerceImageStudioAsync);
         InstallImageGenAutoCommand = new AsyncCommand(InstallImageGenAutoAsync);
-        EnsurePythonCommand = new AsyncCommand(EnsurePythonAsync);
         EnsureNodeCommand = new AsyncCommand(EnsureNodeAsync);
         EnableChineseLocalizationCommand = new AsyncCommand(EnableChineseLocalizationAsync);
         ToggleApiKeyCommand = new AsyncCommand(() =>
@@ -122,6 +115,7 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     public ObservableCollection<string> Models { get; } = [];
+    public ObservableCollection<string> ImageModels { get; } = [];
     public ObservableCollection<BackupItem> Backups { get; } = [];
     public ObservableCollection<string> GatewayLogs { get; } = [];
 
@@ -129,15 +123,13 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand StopGatewayCommand { get; }
     public AsyncCommand SaveConfigurationCommand { get; }
     public AsyncCommand FetchModelsCommand { get; }
-    public AsyncCommand ValidateImageGenerationCommand { get; }
+    public AsyncCommand FetchImageModelsCommand { get; }
     public AsyncCommand RestoreBackupCommand { get; }
     public AsyncCommand RefreshBackupsCommand { get; }
     public AsyncCommand LaunchChatGptCommand { get; }
-    public AsyncCommand InstallChatGptCommand { get; }
     public AsyncCommand OpenCodexDirectoryCommand { get; }
     public AsyncCommand InstallEcommerceImageStudioCommand { get; }
     public AsyncCommand InstallImageGenAutoCommand { get; }
-    public AsyncCommand EnsurePythonCommand { get; }
     public AsyncCommand EnsureNodeCommand { get; }
     public AsyncCommand EnableChineseLocalizationCommand { get; }
     public AsyncCommand ToggleApiKeyCommand { get; }
@@ -201,6 +193,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public string ApiKey { get => _apiKey; set => SetProperty(ref _apiKey, value); }
     public string ImageApiKey { get => _imageApiKey; set => SetProperty(ref _imageApiKey, value); }
     public string ImageGenerationStatus { get => _imageGenerationStatus; private set => SetProperty(ref _imageGenerationStatus, value); }
+    public string ImageModel { get => _imageModel; set => SetProperty(ref _imageModel, value); }
     public string Model { get => _model; set => SetProperty(ref _model, value); }
     public string Provider { get => _provider; set => SetProperty(ref _provider, value); }
     public string CodexBaseUrl
@@ -238,6 +231,7 @@ public sealed class MainWindowViewModel : ObservableObject
             ApplyGateway(_gatewaySettingsService.Load());
             ApiKey = _environmentService.Read(EnvironmentKey);
             ImageApiKey = _environmentService.Read("OPENAI_API_KEY");
+            ImageModel = _environmentService.Read("OPENAI_IMAGE_MODEL");
             RefreshBackups();
             RefreshApplicationStatus();
             GatewayStatus = $"配置文件：{_gatewaySettingsService.SettingsPath}";
@@ -257,9 +251,16 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 throw new InvalidOperationException("令牌不能为空。");
             }
-            if (!CompatibilityMode && string.IsNullOrWhiteSpace(ImageApiKey))
+            var saveImageConfiguration = !CompatibilityMode
+                || !string.IsNullOrWhiteSpace(ImageApiKey)
+                || !string.IsNullOrWhiteSpace(ImageModel);
+            if (saveImageConfiguration && string.IsNullOrWhiteSpace(ImageApiKey))
             {
                 throw new InvalidOperationException("请填写生图 API Key。");
+            }
+            if (saveImageConfiguration && string.IsNullOrWhiteSpace(ImageModel))
+            {
+                throw new InvalidOperationException("请选择生图模型。");
             }
 
             var hasExistingConfiguration = File.Exists(_paths.CodexConfigPath) || File.Exists(_paths.CodexAuthPath);
@@ -277,9 +278,15 @@ public sealed class MainWindowViewModel : ObservableObject
             }
             else
             {
-                await _environmentService.SaveAsync("OPENAI_BASE_URL", EndpointNormalizer.Normalize(CodexBaseUrl));
                 await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
+            }
+            if (saveImageConfiguration)
+            {
+                await _environmentService.SaveAsync(
+                    "OPENAI_BASE_URL",
+                    EndpointNormalizer.Normalize(CodexBaseUrl));
                 await _environmentService.SaveAsync("OPENAI_API_KEY", ImageApiKey);
+                await _environmentService.SaveAsync("OPENAI_IMAGE_MODEL", ImageModel.Trim());
             }
             await _codexConfig.SaveAsync(CurrentCodexSettings());
             await _codexStateService.SynchronizeModelProviderAsync(Provider);
@@ -352,24 +359,28 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    private async Task ValidateImageGenerationAsync()
+    private async Task FetchImageModelsAsync()
     {
         try
         {
-            ImageGenerationStatus = "正在校验生图服务…";
+            ImageGenerationStatus = "正在获取生图模型…";
             var models = await _modelService.FetchAsync(CodexBaseUrl, ImageApiKey);
-            var imageModel = models.Contains("gpt-image-2", StringComparer.Ordinal)
-                ? "gpt-image-2"
-                : models.Contains("gpt-image-1.5", StringComparer.Ordinal)
-                    ? "gpt-image-1.5"
-                    : null;
-            ImageGenerationStatus = imageModel is not null
-                ? $"生图可用：已获取 {imageModel}。"
-                : "生图不可用：未获取到 gpt-image-2 或 gpt-image-1.5。";
+            var previous = ImageModel;
+            ImageModels.Clear();
+            foreach (var item in models)
+            {
+                ImageModels.Add(item);
+            }
+            ImageModel = models.Contains(previous, StringComparer.Ordinal)
+                ? previous
+                : models.Contains("gpt-image-2", StringComparer.Ordinal)
+                    ? "gpt-image-2"
+                    : models[0];
+            ImageGenerationStatus = $"已获取 {models.Count} 个模型，请选择生图模型。";
         }
         catch (Exception exception)
         {
-            ImageGenerationStatus = $"生图不可用：{exception.Message}";
+            ImageGenerationStatus = $"获取生图模型失败：{exception.Message}";
         }
     }
 
@@ -406,6 +417,7 @@ public sealed class MainWindowViewModel : ObservableObject
             await _codexStateService.SynchronizeModelProviderAsync(Provider);
             ApiKey = _environmentService.Read(EnvironmentKey);
             ImageApiKey = _environmentService.Read("OPENAI_API_KEY");
+            ImageModel = _environmentService.Read("OPENAI_IMAGE_MODEL");
             RefreshBackups();
             CodexStatus = $"已还原：{selected.DisplayName}";
         }
@@ -429,21 +441,6 @@ public sealed class MainWindowViewModel : ObservableObject
         return Task.CompletedTask;
     }
 
-    private async Task InstallChatGptAsync()
-    {
-        try
-        {
-            ApplicationStatus = "正在检查 winget 并安装 ChatGPT…";
-            var installResult = await _chatGptInstallerService.InstallAsync();
-            var chatGpt = _launcher.DetectChatGpt();
-            ApplicationStatus = $"{installResult} 当前检测：{chatGpt.Description}";
-        }
-        catch (Exception exception)
-        {
-            ApplicationStatus = $"安装 ChatGPT 失败：{exception.Message}";
-        }
-    }
-
     private Task OpenCodexDirectoryAsync()
     {
         try
@@ -461,13 +458,14 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         try
         {
-            CodexStatus = "正在安装电商生图插件…";
-            var installedDirectory = await _codexPluginService.InstallEcommerceImageStudioAsync();
-            CodexStatus = $"电商生图插件已安装到：{installedDirectory}";
+            CodexStatus = "正在准备托管 Node.js 并安装电商生图 Skill…";
+            await _nodeRuntimeService.EnsureNodeAsync();
+            var installedDirectory = await _ecommerceImageStudioSkillService.InstallAsync();
+            CodexStatus = $"电商生图 Skill 已安装到：{installedDirectory}";
         }
         catch (Exception exception)
         {
-            CodexStatus = $"安装电商生图插件失败：{exception.Message}";
+            CodexStatus = $"安装电商生图 Skill 失败：{exception.Message}";
         }
     }
 
@@ -475,26 +473,14 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         try
         {
-            CodexStatus = "正在安装兼容版生图 Skill…";
+            CodexStatus = "正在准备托管 Node.js 并安装兼容版生图 Skill…";
+            await _nodeRuntimeService.EnsureNodeAsync();
             var installedDirectory = await _codexSkillService.InstallImageGenAutoAsync();
             CodexStatus = $"兼容版生图 Skill 已安装到：{installedDirectory}";
         }
         catch (Exception exception)
         {
             CodexStatus = $"安装兼容版生图 Skill 失败：{exception.Message}";
-        }
-    }
-
-    private async Task EnsurePythonAsync()
-    {
-        try
-        {
-            CodexStatus = "正在检测 Python 环境…";
-            CodexStatus = await _pythonRuntimeService.EnsurePythonAsync();
-        }
-        catch (Exception exception)
-        {
-            CodexStatus = $"Python 处理失败：{exception.Message}";
         }
     }
 
@@ -582,7 +568,7 @@ public sealed class MainWindowViewModel : ObservableObject
         LocalBindIp = settings.LocalBindIp;
         ListenPort = settings.ListenPort;
         UpstreamBaseUrl = EndpointNormalizer.Normalize(settings.UpstreamBaseUrl);
-        CompatibilityMode = settings.CompatibilityMode;
+        CompatibilityMode = false;
         if (!string.IsNullOrWhiteSpace(settings.DirectCodexBaseUrl))
         {
             CodexBaseUrl = EndpointNormalizer.Normalize(settings.DirectCodexBaseUrl);

@@ -17,8 +17,12 @@
 
   <ItemGroup>
     <ProjectReference Include="../LlmGateway.csproj" />
+    <Compile Include="../LlmGateway.Desktop/Services/AppPaths.cs" Link="Services/AppPaths.cs" />
     <Compile Include="../LlmGateway.Desktop/Services/CodexLocalizationService.cs" Link="Services/CodexLocalizationService.cs" />
     <Compile Include="../LlmGateway.Desktop/Services/CodexContentInstaller.cs" Link="Services/CodexContentInstaller.cs" />
+    <Compile Include="../LlmGateway.Desktop/Services/CodexSkillService.cs" Link="Services/CodexSkillService.cs" />
+    <Compile Include="../LlmGateway.Desktop/Services/EcommerceImageStudioSkillService.cs" Link="Services/EcommerceImageStudioSkillService.cs" />
+    <Compile Include="../LlmGateway.Desktop/Services/NodeRuntimeService.cs" Link="Services/NodeRuntimeService.cs" />
   </ItemGroup>
 
 </Project>

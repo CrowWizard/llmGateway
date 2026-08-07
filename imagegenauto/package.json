@@ -1,0 +1,11 @@
+{
+  "name": "imagegenauto",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20.0.0" },
+  "scripts": {
+    "generate": "node scripts/image_gen_auto.mjs generate",
+    "edit": "node scripts/image_gen_auto.mjs edit",
+    "batch": "node scripts/image_gen.mjs generate-batch"
+  }
+}

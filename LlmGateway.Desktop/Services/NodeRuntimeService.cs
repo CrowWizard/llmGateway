@@ -1,121 +1,155 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Net.Http;
+using System.IO.Compression;
+using System.Text.Json;
 
 namespace LlmGateway.Desktop.Services;
 
-public sealed class NodeRuntimeService
+public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = null)
 {
     private const string NodeVersion = "22.22.3";
-    private const string WindowsInstallerUrl = "https://mirrors.aliyun.com/nodejs-release/v22.22.3/node-v22.22.3-x64.msi";
-    private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromMinutes(10) };
+    private readonly HttpClient _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
 
     public async Task<string> EnsureNodeAsync()
     {
-        var existing = await FindNodeAsync();
-        if (existing is not null)
+        var managedNode = GetManagedNodePath();
+        var managedVersion = await TryGetVersionAsync(managedNode);
+        if (managedVersion is not null)
         {
-            return $"已检测到 Node.js：{existing}";
+            if (!File.Exists(Path.Combine(paths.NodeRuntimeSkillDirectory, "node_modules", "sharp", "package.json")))
+            {
+                await InstallSharedPackagesAsync(managedNode, Path.GetDirectoryName(managedNode)!);
+            }
+            return $"托管 Node.js 已就绪：{managedNode} {managedVersion}";
         }
 
-        if (!OperatingSystem.IsWindows())
+        var platform = GetPlatformPackage();
+        if (platform is null)
         {
-            throw new PlatformNotSupportedException("Node.js 自动安装目前仅支持 Windows。");
+            return await SystemFallbackAsync("当前平台暂无托管 Node.js 包");
         }
 
-        var installerPath = Path.Combine(Path.GetTempPath(), $"node-v{NodeVersion}-x64.msi");
+        await InstallRuntimeSkillAsync();
+        var archivePath = Path.Combine(paths.CodexTemporaryDirectory, platform.ArchiveName);
+        var extractDirectory = Path.Combine(paths.CodexTemporaryDirectory, $"node-{Guid.NewGuid():N}");
         try
         {
-            await using (var responseStream = await _httpClient.GetStreamAsync(WindowsInstallerUrl))
-            await using (var installerStream = File.Create(installerPath))
+            Directory.CreateDirectory(paths.CodexTemporaryDirectory);
+            await using (var responseStream = await _httpClient.GetStreamAsync(platform.Url))
+            await using (var archiveStream = File.Create(archivePath))
             {
-                await responseStream.CopyToAsync(installerStream);
+                await responseStream.CopyToAsync(archiveStream);
             }
 
-            using var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = "msiexec.exe",
-                ArgumentList = { "/i", installerPath, "/qn", "/norestart", "ADDLOCAL=ALL" },
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            }) ?? throw new InvalidOperationException("无法启动 Node.js 安装程序。" );
+            ZipFile.ExtractToDirectory(archivePath, extractDirectory);
+            var extractedRoot = Directory.EnumerateDirectories(extractDirectory).Single();
+            var targetDirectory = Path.GetDirectoryName(managedNode)!;
+            CodexContentInstaller.MoveToTemporary(targetDirectory, paths.CodexTemporaryDirectory);
+            Directory.Move(extractedRoot, targetDirectory);
 
-            await process.WaitForExitAsync();
-            if (process.ExitCode is not 0 and not 3010)
-            {
-                var error = (await process.StandardError.ReadToEndAsync()).Trim();
-                throw new InvalidOperationException($"Node.js 安装失败（退出码 {process.ExitCode}）{(string.IsNullOrWhiteSpace(error) ? string.Empty : $"：{error}")}。");
-            }
-
-            var nodeDirectory = FindInstalledNodeDirectory();
-            if (nodeDirectory is not null)
-            {
-                AddToUserPath(nodeDirectory);
-            }
-
-            var installed = await FindNodeAsync();
-            var restartMessage = process.ExitCode == 3010 ? "安装程序要求重启系统以完成更新；" : string.Empty;
-            return installed is null
-                ? $"{restartMessage}Node.js 安装程序已完成，请重新启动应用以刷新 PATH。"
-                : $"{restartMessage}Node.js 安装完成：{installed}";
+            var installedVersion = await TryGetVersionAsync(managedNode)
+                ?? throw new InvalidOperationException("托管 Node.js 解压完成，但运行验证失败。");
+            await InstallSharedPackagesAsync(managedNode, targetDirectory);
+            await WriteManifestAsync(platform, installedVersion);
+            return $"托管 Node.js 安装完成：{managedNode} {installedVersion}";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidDataException or InvalidOperationException)
+        {
+            return await SystemFallbackAsync($"托管 Node.js 安装失败：{exception.Message}");
         }
         finally
         {
-            try
-            {
-                if (File.Exists(installerPath))
-                {
-                    File.Delete(installerPath);
-                }
-            }
-            catch (IOException)
-            {
-            }
+            TryDeleteFile(archivePath);
+            TryDeleteDirectory(extractDirectory);
         }
     }
 
-    private static async Task<string?> FindNodeAsync()
+    public string GetManagedNodePath()
     {
-        foreach (var command in new[] { "node.exe", "node" })
+        return Path.Combine(paths.NodeRuntimeDirectory, GetRuntimeIdentifier(), "node.exe");
+    }
+
+    private async Task InstallRuntimeSkillAsync()
+    {
+        if (!File.Exists(Path.Combine(paths.NodeRuntimeSourceDirectory, "SKILL.md")))
+        {
+            throw new InvalidOperationException("未找到内置 noderuntime Skill。请重新安装应用。");
+        }
+
+        await CodexContentInstaller.InstallAsync(paths.NodeRuntimeSourceDirectory, paths.NodeRuntimeSkillDirectory, paths.CodexTemporaryDirectory);
+    }
+
+    private async Task InstallSharedPackagesAsync(string nodePath, string targetDirectory)
+    {
+        var npmPath = OperatingSystem.IsWindows() ? Path.Combine(targetDirectory, "npm.cmd") : Path.Combine(targetDirectory, "bin", "npm");
+        if (!File.Exists(npmPath))
+        {
+            throw new InvalidOperationException("托管 Node.js 中未找到 npm，无法安装共享图片处理库。");
+        }
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = npmPath,
+            WorkingDirectory = paths.NodeRuntimeSkillDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        startInfo.ArgumentList.Add("install");
+        startInfo.ArgumentList.Add("--omit=dev");
+        startInfo.Environment["PATH"] = $"{Path.GetDirectoryName(nodePath)}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}";
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("无法启动托管 npm。");
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        var output = (await outputTask).Trim();
+        var error = (await errorTask).Trim();
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"共享 Node 库安装失败：{(string.IsNullOrWhiteSpace(error) ? output : error)}");
+        }
+    }
+
+    private async Task WriteManifestAsync(PlatformPackage platform, string version)
+    {
+        var manifest = JsonSerializer.Serialize(new
+        {
+            version,
+            rid = GetRuntimeIdentifier(),
+            executable = Path.GetRelativePath(paths.NodeRuntimeSkillDirectory, GetManagedNodePath()),
+            source = platform.Url,
+            fallback = "system-node"
+        }, new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync(Path.Combine(paths.NodeRuntimeSkillDirectory, "runtime.json"), manifest + Environment.NewLine);
+    }
+
+    private static PlatformPackage? GetPlatformPackage()
+    {
+        const string archiveName = $"node-v{NodeVersion}-win-x64.zip";
+        return OperatingSystem.IsWindows() && Environment.Is64BitOperatingSystem
+            ? new PlatformPackage(archiveName, $"https://mirrors.aliyun.com/nodejs-release/v{NodeVersion}/{archiveName}")
+            : null;
+    }
+
+    private static string GetRuntimeIdentifier() => "win-x64";
+
+    private static async Task<string> SystemFallbackAsync(string reason)
+    {
+        var systemNode = await FindSystemNodeAsync();
+        return systemNode is not null
+            ? $"{reason}，已降级使用系统 Node.js：{systemNode}"
+            : throw new InvalidOperationException($"{reason}，且未检测到系统 Node.js。");
+    }
+
+    private static async Task<string?> FindSystemNodeAsync()
+    {
+        foreach (var command in OperatingSystem.IsWindows() ? new[] { "node.exe", "node" } : new[] { "node", "nodejs" })
         {
             var version = await TryGetVersionAsync(command);
-            if (version is not null)
-            {
-                return $"{command} {version}";
-            }
+            if (version is not null) return $"{command} {version}";
         }
-
-        var nodeDirectory = FindInstalledNodeDirectory();
-        return nodeDirectory is null ? null : await TryGetVersionAsync(Path.Combine(nodeDirectory, "node.exe"));
-    }
-
-    private static string? FindInstalledNodeDirectory()
-    {
-        var candidates = new[]
-        {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "nodejs"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "nodejs")
-        };
-        return candidates.FirstOrDefault(directory => File.Exists(Path.Combine(directory, "node.exe")));
-    }
-
-    private static void AddToUserPath(string directory)
-    {
-        var userPath = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User) ?? string.Empty;
-        var entries = userPath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (!entries.Contains(directory, StringComparer.OrdinalIgnoreCase))
-        {
-            Environment.SetEnvironmentVariable("PATH", string.IsNullOrWhiteSpace(userPath) ? directory : $"{directory}{Path.PathSeparator}{userPath}", EnvironmentVariableTarget.User);
-        }
-
-        var processPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-        if (!processPath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Contains(directory, StringComparer.OrdinalIgnoreCase))
-        {
-            Environment.SetEnvironmentVariable("PATH", $"{directory}{Path.PathSeparator}{processPath}");
-        }
+        return null;
     }
 
     private static async Task<string?> TryGetVersionAsync(string command)
@@ -131,11 +165,7 @@ public sealed class NodeRuntimeService
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             });
-            if (process is null)
-            {
-                return null;
-            }
-
+            if (process is null) return null;
             var output = await process.StandardOutput.ReadToEndAsync();
             var error = await process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync();
@@ -147,4 +177,16 @@ public sealed class NodeRuntimeService
             return null;
         }
     }
+
+    private static void TryDeleteFile(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch (IOException) { }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try { if (Directory.Exists(path)) Directory.Delete(path, true); } catch (IOException) { }
+    }
+
+    private sealed record PlatformPackage(string ArchiveName, string Url);
 }

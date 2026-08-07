@@ -11,6 +11,9 @@ public sealed class CodexSkillService(AppPaths paths)
             throw new InvalidOperationException("未找到内置兼容版生图 Skill。请重新安装应用。");
         }
 
+        var systemImageGenDirectory = Path.Combine(paths.CodexSkillsDirectory, ".system", "imagegen");
+        CodexContentInstaller.MoveToTemporary(systemImageGenDirectory, paths.CodexTemporaryDirectory);
+
         var targetDirectory = Path.Combine(paths.CodexSkillsDirectory, "imagegenauto");
         return CodexContentInstaller.InstallAsync(sourceDirectory, targetDirectory, paths.CodexTemporaryDirectory);
     }

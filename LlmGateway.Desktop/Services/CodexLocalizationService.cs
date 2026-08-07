@@ -56,11 +56,38 @@ public sealed class CodexLocalizationService
         var backupPath = appAsarPath + ".bak";
         if (!File.Exists(backupPath))
         {
-            File.Copy(appAsarPath, backupPath);
+            try
+            {
+                File.Copy(appAsarPath, backupPath);
+                File.SetAttributes(backupPath, FileAttributes.Normal);
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                throw new UnauthorizedAccessException(
+                    "无法创建 app.asar 备份，请以管理员身份运行，或将 Codex 安装到当前用户可写目录后重试。", exception);
+            }
         }
 
         data[markerIndex + disabledIndex + 2] = (byte)'0';
-        File.WriteAllBytes(appAsarPath, data);
+        var temporaryPath = appAsarPath + $".{Guid.NewGuid():N}.tmp";
+        try
+        {
+            File.SetAttributes(appAsarPath, FileAttributes.Normal);
+            File.WriteAllBytes(temporaryPath, data);
+            File.Move(temporaryPath, appAsarPath, true);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            throw new UnauthorizedAccessException(
+                "无法修改 app.asar。请以管理员身份运行应用，并确认 Codex/ChatGPT 已完全退出。", exception);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                File.Delete(temporaryPath);
+            }
+        }
 
         var verification = File.ReadAllBytes(appAsarPath);
         var verificationMarker = verification.AsSpan().IndexOf(I18nMarker);

@@ -7,12 +7,7 @@ public static class CodexContentInstaller
 
     public static string Install(string sourceDirectory, string targetDirectory, string temporaryDirectory)
     {
-        if (Directory.Exists(targetDirectory))
-        {
-            Directory.CreateDirectory(temporaryDirectory);
-            var backupDirectory = CreateBackupDirectory(temporaryDirectory, Path.GetFileName(targetDirectory));
-            Directory.Move(targetDirectory, backupDirectory);
-        }
+        MoveToTemporary(targetDirectory, temporaryDirectory);
 
         foreach (var sourceFile in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
         {
@@ -23,6 +18,19 @@ public static class CodexContentInstaller
         }
 
         return targetDirectory;
+    }
+
+    public static string? MoveToTemporary(string targetDirectory, string temporaryDirectory)
+    {
+        if (!Directory.Exists(targetDirectory))
+        {
+            return null;
+        }
+
+        Directory.CreateDirectory(temporaryDirectory);
+        var backupDirectory = CreateBackupDirectory(temporaryDirectory, Path.GetFileName(targetDirectory));
+        Directory.Move(targetDirectory, backupDirectory);
+        return backupDirectory;
     }
 
     private static string CreateBackupDirectory(string temporaryDirectory, string contentName)

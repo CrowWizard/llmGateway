@@ -2,6 +2,7 @@
 [Bb]in/
 [Oo]bj/
 [Pp]ublish/
+node_modules/
 
 # Visual Studio and Rider
 .vs/

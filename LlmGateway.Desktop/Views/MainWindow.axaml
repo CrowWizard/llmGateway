@@ -5,7 +5,7 @@
         x:DataType="vm:MainWindowViewModel"
         Title="Codex 配置"
         Icon="/Assets/codex-config.ico"
-        Width="1120" Height="720"
+          Width="1040" Height="760"
         MinWidth="820" MinHeight="600"
         WindowStartupLocation="CenterScreen">
   <Grid RowDefinitions="64,*">
@@ -18,31 +18,28 @@
           <TextBlock Text="Codex 配置" FontSize="16" FontWeight="SemiBold" />
           <TextBlock Classes="caption" Text="模型、凭据与连接方式" />
         </StackPanel>
-        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
-          <Border Classes="status-badge">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <Ellipse Width="7" Height="7" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding GatewayStateText}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-            </StackPanel>
-          </Border>
-          <Button Classes="primary" Command="{Binding SaveConfigurationCommand}" Content="保存配置" />
-        </StackPanel>
+        <Button Grid.Column="2" Classes="primary" Command="{Binding SaveConfigurationCommand}" Content="保存配置" VerticalAlignment="Center" />
       </Grid>
     </Border>
 
     <Grid Grid.Row="1">
       <ScrollViewer HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="28,24,28,28" Spacing="16">
-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="20">
-            <StackPanel Spacing="4">
-              <TextBlock FontSize="20" FontWeight="SemiBold" Text="连接配置" />
-              <TextBlock Classes="caption" Text="设置 Codex 使用的模型、凭据和连接模式。" />
-            </StackPanel>
-            <CheckBox Grid.Column="1" Classes="mode-toggle" IsChecked="{Binding CompatibilityMode}" Content="使用本地兼容服务" VerticalAlignment="Center" />
-          </Grid>
+          <StackPanel Spacing="4">
+            <TextBlock FontSize="20" FontWeight="SemiBold" Text="连接配置" />
+            <TextBlock Classes="caption" Text="设置 Codex 与生图服务使用的模型和凭据。" />
+          </StackPanel>
 
           <Border Classes="card">
-            <StackPanel Spacing="18">
+            <StackPanel Spacing="20">
+              <StackPanel Spacing="4">
+                <TextBlock Classes="section-title" Text="Codex" />
+                <TextBlock Classes="caption" Text="用于对话、代码生成和模型访问。" />
+              </StackPanel>
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="Base URL" />
+                <TextBox Text="{Binding CodexBaseUrl}" PlaceholderText="https://api.example.com/v1" />
+              </StackPanel>
               <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
                 <StackPanel Spacing="6">
                   <TextBlock Classes="caption" Text="API Key" />
@@ -53,92 +50,39 @@
                   <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding Model}" IsEditable="True" />
                 </StackPanel>
               </Grid>
-              <StackPanel IsVisible="{Binding IsDirectCodexMode}" Spacing="6">
-                <TextBlock Classes="caption" Text="Base URL" />
-                <TextBox Text="{Binding CodexBaseUrl}" PlaceholderText="https://api.example.com/v1" VerticalContentAlignment="Center" />
-              </StackPanel>
-              <StackPanel IsVisible="{Binding IsDirectCodexMode}" Spacing="6">
-                <TextBlock Classes="caption" Text="生图 API Key" />
-                <TextBox Text="{Binding ImageApiKey}" PasswordChar="●" RevealPassword="{Binding IsApiKeyVisible}" PlaceholderText="输入可访问 gpt-image-2 的令牌" />
-                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                  <Button Classes="secondary" Command="{Binding ValidateImageGenerationCommand}" Content="校验生图服务" />
-                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ImageGenerationStatus}" VerticalAlignment="Center" TextWrapping="Wrap" />
-                </Grid>
-              </StackPanel>
               <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
-                <Button Classes="secondary" Command="{Binding ToggleApiKeyCommand}" Content="显示 / 隐藏 Key" />
-                <Button Grid.Column="1" Classes="secondary" Command="{Binding FetchModelsCommand}" Content="验证并获取模型" />
+                <Button Classes="secondary" Command="{Binding FetchModelsCommand}" Content="验证并获取模型" />
+                <Button Grid.Column="1" Classes="ghost" Command="{Binding ToggleApiKeyCommand}" Content="显示 / 隐藏 Key" />
               </Grid>
-            </StackPanel>
-          </Border>
 
-          <Border IsVisible="{Binding CompatibilityMode}" Classes="card">
-            <StackPanel Spacing="18">
-              <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Spacing="4">
-                  <TextBlock Classes="section-title" Text="本地兼容服务" />
-                  <TextBlock Classes="caption" Text="将 Responses 请求转换为上游 Chat Completions。" />
-                </StackPanel>
-                <Border Grid.Column="1" Classes="status-badge">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <Ellipse Width="7" Height="7" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding GatewayStateText}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                  </StackPanel>
-                </Border>
-              </Grid>
-              <Grid ColumnDefinitions="*,*,2*" ColumnSpacing="12">
+              <Border Height="1" Background="{DynamicResource BorderSubtleBrush}" />
+
+              <StackPanel Spacing="4">
+                <TextBlock Classes="section-title" Text="生图" />
+                <TextBlock Classes="caption" Text="与 Codex 共用 Base URL，单独配置凭据和模型。" />
+              </StackPanel>
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
                 <StackPanel Spacing="6">
-                  <TextBlock Classes="caption" Text="监听 IP" />
-                  <TextBox Text="{Binding LocalBindIp}" PlaceholderText="127.0.0.1" />
+                  <TextBlock Classes="caption" Text="生图 API Key" />
+                  <TextBox Text="{Binding ImageApiKey}" PasswordChar="●" RevealPassword="{Binding IsApiKeyVisible}" PlaceholderText="输入可访问生图服务的令牌" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Spacing="6">
-                  <TextBlock Classes="caption" Text="端口" />
-                  <NumericUpDown Value="{Binding ListenPort}" Minimum="1" Maximum="65535" FormatString="0" />
-                </StackPanel>
-                <StackPanel Grid.Column="2" Spacing="6">
-                  <TextBlock Classes="caption" Text="上游 Base URL" />
-                  <TextBox Text="{Binding UpstreamBaseUrl}" PlaceholderText="https://api.example.com" VerticalContentAlignment="Center" />
+                  <TextBlock Classes="caption" Text="生图模型" />
+                  <ComboBox ItemsSource="{Binding ImageModels}" SelectedItem="{Binding ImageModel}" IsEditable="True" PlaceholderText="获取或输入模型 ID" />
                 </StackPanel>
               </Grid>
-              <StackPanel Spacing="6">
-                <TextBlock Classes="caption" Text="Codex Base URL" />
-                <TextBox Text="{Binding EffectiveCodexBaseUrl}" IsReadOnly="True" VerticalContentAlignment="Center" />
-              </StackPanel>
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                <CheckBox IsChecked="{Binding LogTraffic}" Content="记录脱敏运行日志" VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                  <Button Classes="secondary" Command="{Binding StartGatewayCommand}" Content="启动服务" />
-                  <Button Classes="danger" Command="{Binding StopGatewayCommand}" Content="停止" />
-                </StackPanel>
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                <Button Classes="secondary" Command="{Binding FetchImageModelsCommand}" Content="获取生图模型" />
+                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ImageGenerationStatus}" VerticalAlignment="Center" TextWrapping="Wrap" />
               </Grid>
             </StackPanel>
           </Border>
 
           <Border Classes="feedback-panel">
-            <StackPanel Spacing="4">
-              <TextBlock IsVisible="{Binding CompatibilityMode}" Text="{Binding GatewayStatus}" FontSize="12" TextWrapping="Wrap" />
-              <TextBlock Text="{Binding CodexStatus}" FontSize="12" TextWrapping="Wrap" />
-            </StackPanel>
+            <TextBlock Text="{Binding CodexStatus}" FontSize="12" TextWrapping="Wrap" />
           </Border>
 
-          <Border IsVisible="{Binding CompatibilityMode}" Classes="card">
-            <Grid RowDefinitions="Auto,*" MinHeight="250">
-              <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Spacing="4">
-                  <TextBlock Classes="section-title" Text="运行日志" />
-                  <TextBlock Classes="caption" Text="敏感请求头会自动脱敏。" />
-                </StackPanel>
-                <Button Grid.Column="1" Classes="ghost" Command="{Binding ClearLogsCommand}" Content="清空" />
-              </Grid>
-              <ListBox Grid.Row="1" Classes="log-list" Margin="0,14,0,0" ItemsSource="{Binding GatewayLogs}" FontFamily="Cascadia Mono, monospace" FontSize="12">
-                <ListBox.ItemTemplate>
-                  <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" Foreground="{DynamicResource LogTextBrush}" /></DataTemplate>
-                </ListBox.ItemTemplate>
-              </ListBox>
-            </Grid>
-          </Border>
-
-          <Grid ColumnDefinitions="3*,2*" ColumnSpacing="16">
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
             <Border Classes="card">
               <StackPanel Spacing="14">
                 <StackPanel Spacing="4">
@@ -153,17 +97,14 @@
                 </Grid>
               </StackPanel>
             </Border>
-            <Border Grid.Column="1" Classes="card" MinHeight="250">
+            <Border Grid.Column="1" Classes="card">
               <StackPanel Spacing="14">
                 <StackPanel Spacing="4">
-                  <TextBlock Classes="section-title" Text="工具" />
-                  <TextBlock Classes="caption" Text="启动 ChatGPT 客户端并查看运行状态。" TextWrapping="Wrap" />
+                  <TextBlock Classes="section-title" Text="客户端" />
+                  <TextBlock Classes="caption" Text="启动已安装的 ChatGPT 客户端。" TextWrapping="Wrap" />
                 </StackPanel>
-                <StackPanel Spacing="8">
-                  <Button HorizontalAlignment="Stretch" Classes="primary" Command="{Binding LaunchChatGptCommand}" Content="启动 ChatGPT" />
-                  <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallChatGptCommand}" Content="安装 ChatGPT" />
-                  <TextBlock Classes="caption" Text="{Binding ApplicationStatus}" TextWrapping="Wrap" />
-                </StackPanel>
+                <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding LaunchChatGptCommand}" Content="启动 ChatGPT" />
+                <TextBlock Classes="caption" Text="{Binding ApplicationStatus}" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
           </Grid>
@@ -172,18 +113,14 @@
             <StackPanel Spacing="14">
               <StackPanel Spacing="4">
                 <TextBlock Classes="section-title" Text="安装组件" />
-                <TextBlock Classes="caption" Text="安装电商插件、兼容版生图 Skill 及其 Python、Node.js 运行环境。" TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="安装电商与兼容版生图 Skill，共用应用托管的 Node.js 运行环境。" TextWrapping="Wrap" />
               </StackPanel>
-              <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="10">
-                <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallEcommerceImageStudioCommand}" Content="安装电商生图插件" />
+              <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallEcommerceImageStudioCommand}" Content="安装电商生图 Skill" />
                 <Button Grid.Column="1" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallImageGenAutoCommand}" Content="安装兼容版生图 Skill" />
-                <Button Grid.Column="2" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding EnsurePythonCommand}" Content="检测 / 安装 Python 3.14.6" />
-                <Button Grid.Column="3" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding EnsureNodeCommand}" Content="检测 / 安装 Node.js 22.22.3" />
+                <Button Grid.Column="2" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding EnsureNodeCommand}" Content="安装 Node 运行时" />
               </Grid>
-              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                <Button Classes="secondary" Command="{Binding EnableChineseLocalizationCommand}" Content="启用 Codex 界面汉化" />
-                <TextBlock Grid.Column="1" Classes="caption" Text="自动定位 app.asar，首次修改会创建 .bak 备份；会先关闭运行中的 Codex/ChatGPT。" TextWrapping="Wrap" VerticalAlignment="Center" />
-              </Grid>
+              <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding EnableChineseLocalizationCommand}" Content="启用 Codex 界面汉化" />
             </StackPanel>
           </Border>
         </StackPanel>

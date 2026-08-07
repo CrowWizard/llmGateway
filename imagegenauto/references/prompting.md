@@ -1,10 +1,8 @@
 # Prompting best practices
 
-These prompting principles are shared by both top-level modes of the skill:
-- built-in `image_gen` tool (default)
-- explicit `scripts/image_gen.py` CLI fallback
+These prompting principles apply to the bundled `scripts/image_gen.mjs` Node CLI.
 
-This file is about prompt structure, specificity, and iteration. Fallback-only execution controls such as `quality`, `input_fidelity`, masks, output format, and output paths live in the fallback docs.
+This file is about prompt structure, specificity, and iteration. Execution controls such as `quality`, `input_fidelity`, masks, output format, and output paths live in the CLI docs.
 
 ## Contents
 - [Structure](#structure)
@@ -73,13 +71,13 @@ Do not add:
 - Prefer one targeted follow-up at a time over rewriting the whole prompt.
 
 ## Transparent images
-- Use built-in `image_gen` first for transparent-image requests. If the subject is clearly too complex for chroma-key removal, explain the fallback and ask before switching to CLI.
+- For simple transparent-image requests, generate against a removable chroma-key background before local alpha extraction.
 - Prompt for a perfectly flat solid chroma-key background, usually `#00ff00`; use `#ff00ff` when the subject is green, and avoid key colors that appear in the subject.
 - Explicitly prohibit shadows, gradients, floor planes, reflections, texture, and lighting variation in the background.
 - Ask for crisp edges, generous padding, and no use of the key color inside the subject.
-- After generation, remove the background locally with `python "${CODEX_HOME:-$HOME/.codex}/skills/.system/imagegen/scripts/remove_chroma_key.py" --input <source> --out <final.png> --auto-key border --soft-matte --transparent-threshold 12 --opaque-threshold 220 --despill` and validate the alpha result before shipping it.
+- After generation, remove the background with `%USERPROFILE%\.codex\skills\noderuntime\scripts\run-node.cmd "%USERPROFILE%\.codex\skills\imagegenauto\scripts\remove_chroma_key.mjs" --input <source> --out <final.png> --auto-key border --soft-matte --transparent-threshold 12 --opaque-threshold 220 --despill` and validate the alpha result before shipping it.
 - Use soft matte and despill for antialiased edges; hard tolerance-only removal is mainly for flat pixel-art or exact-color fixtures.
-- Use CLI `gpt-image-1.5 --background transparent --output-format png` only after the user explicitly confirms the fallback, or when the user already explicitly requested `gpt-image-1.5`, `scripts/image_gen.py`, or CLI fallback. Ask first for true/native transparency requests, failed chroma-key validation, or complex transparent subjects such as hair, fur, glass, smoke, liquids, translucent materials, reflective objects, or soft shadows.
+- Use `gpt-image-1.5 --background transparent --output-format png` for true native transparency or complex subjects such as hair, fur, glass, smoke, liquids, translucent materials, reflective objects, or soft shadows.
 
 ## Fallback-only execution controls
 - `quality`, `input_fidelity`, explicit masks, output format, and output paths are fallback-only execution controls.
