@@ -2,15 +2,15 @@ namespace LlmGateway.Desktop.Services;
 
 public sealed class ErrorLogService
 {
-    private readonly string _logPath;
+    private readonly string _logDirectory;
     private readonly object _sync = new();
 
     public ErrorLogService(AppPaths paths)
     {
-        _logPath = Path.Combine(paths.CodexDirectory, "llm-gateway-errors.log");
+        _logDirectory = Path.Combine(paths.CodexDirectory, "logs");
     }
 
-    public string LogPath => _logPath;
+    public string LogDirectory => _logDirectory;
 
     public void WriteInformation(string operation, string message) => WriteEntry(operation, message);
 
@@ -21,21 +21,24 @@ public sealed class ErrorLogService
     {
         try
         {
-            var directory = Path.GetDirectoryName(_logPath);
-            if (!string.IsNullOrWhiteSpace(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
+            Directory.CreateDirectory(_logDirectory);
+            var logPath = Path.Combine(_logDirectory, $"{GetFileName(operation)}.log");
 
             var entry = $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}] {operation}\n{detail}\n{new string('-', 80)}\n";
             lock (_sync)
             {
-                File.AppendAllText(_logPath, entry);
+                File.AppendAllText(logPath, entry);
             }
         }
         catch
         {
             // Logging must never replace the original operation failure.
         }
+    }
+
+    private static string GetFileName(string operation)
+    {
+        var fileName = string.Concat(operation.Select(character => char.IsLetterOrDigit(character) ? char.ToLowerInvariant(character) : '-'));
+        return $"{fileName.Trim('-')}-errors";
     }
 }

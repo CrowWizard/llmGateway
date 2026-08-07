@@ -129,7 +129,7 @@
                        Background="Transparent"
                        Padding="0"
                        IsHitTestVisible="True" />
-              <TextBlock Classes="caption" Text="{Binding ErrorLogPath, StringFormat='详细错误日志：{0}'}" TextWrapping="Wrap" />
+              <TextBlock Classes="caption" Text="{Binding ErrorLogPath, StringFormat='详细操作日志目录：{0}'}" TextWrapping="Wrap" />
             </StackPanel>
           </Border>
 

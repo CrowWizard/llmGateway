@@ -242,7 +242,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public string AililiImageKey { get => _aililiImageKey; private set => SetProperty(ref _aililiImageKey, value); }
     public string AililiStatus { get => _aililiStatus; private set => SetProperty(ref _aililiStatus, value); }
     public string AililiCredentialsPath => _paths.AililiCredentialsPath;
-    public string ErrorLogPath => _errorLogService.LogPath;
+    public string ErrorLogPath => _errorLogService.LogDirectory;
     public string CodexDirectory => _paths.CodexDirectory;
 
     private void Load()
@@ -273,7 +273,7 @@ public sealed class MainWindowViewModel : ObservableObject
             AililiStatus = "正在注册 Ailili 账号…";
             var account = await _aililiAccountService.RegisterAccountAsync();
             ApplyAililiAccount(account);
-            AililiStatus = "Ailili 账号注册成功，请继续创建两个分组 Key。";
+            AililiStatus = "Ailili 账号注册并登录成功，请继续创建两个分组 Key。";
         }
         catch (Exception exception)
         {

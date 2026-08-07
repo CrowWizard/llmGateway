@@ -16,6 +16,7 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
     };
 
     private readonly HttpClient _httpClient = httpClient ?? new HttpClient();
+    private string? _accessToken;
 
     public AililiAccount? Load()
     {
@@ -48,6 +49,7 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
 
         var account = new AililiAccount(username, password, string.Empty, string.Empty);
         await SaveAsync(account, cancellationToken);
+        await LoginAsync(account, cancellationToken);
         return account;
     }
 
@@ -55,6 +57,33 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
     {
         account ??= Load() ?? throw new InvalidOperationException("请先注册 Ailili 账号。");
 
+        var accessToken = _accessToken ?? await LoginAsync(account, cancellationToken);
+
+        var tokens = await SendAsync<TokenPage>(HttpMethod.Get, "/api/token/?p=0&page_size=20", null, accessToken, cancellationToken);
+        if (tokens.Items.All(item => item.Name != "Codex"))
+        {
+            await CreateTokenAsync("Codex", "OpenAI-gpt", accessToken, cancellationToken);
+        }
+        if (tokens.Items.All(item => item.Name != "生图"))
+        {
+            await CreateTokenAsync("生图", "gpt-image-2", accessToken, cancellationToken);
+        }
+
+        tokens = await SendAsync<TokenPage>(HttpMethod.Get, "/api/token/?p=0&page_size=20", null, accessToken, cancellationToken);
+        var codexToken = tokens.Items.FirstOrDefault(item => item.Name == "Codex")
+            ?? throw new InvalidOperationException("未找到已创建的 Codex 令牌。");
+        var imageToken = tokens.Items.FirstOrDefault(item => item.Name == "生图")
+            ?? throw new InvalidOperationException("未找到已创建的生图令牌。");
+
+        var codexKey = await GetTokenKeyAsync(codexToken.Id, accessToken, cancellationToken);
+        var imageKey = await GetTokenKeyAsync(imageToken.Id, accessToken, cancellationToken);
+        account = account with { CodexKey = codexKey, ImageKey = imageKey };
+        await SaveAsync(account, cancellationToken);
+        return account;
+    }
+
+    private async Task<string> LoginAsync(AililiAccount account, CancellationToken cancellationToken)
+    {
         var login = await SendAsync<LoginData>(HttpMethod.Post, "/api/user/login", new
         {
             username = account.Username,
@@ -66,27 +95,8 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
             throw new InvalidOperationException("Ailili 登录未返回访问令牌。");
         }
 
-        var tokens = await SendAsync<TokenPage>(HttpMethod.Get, "/api/token/?p=0&page_size=20", null, login.AccessToken, cancellationToken);
-        if (tokens.Items.All(item => item.Name != "Codex"))
-        {
-            await CreateTokenAsync("Codex", "OpenAI-gpt", login.AccessToken, cancellationToken);
-        }
-        if (tokens.Items.All(item => item.Name != "生图"))
-        {
-            await CreateTokenAsync("生图", "gpt-image-2", login.AccessToken, cancellationToken);
-        }
-
-        tokens = await SendAsync<TokenPage>(HttpMethod.Get, "/api/token/?p=0&page_size=20", null, login.AccessToken, cancellationToken);
-        var codexToken = tokens.Items.FirstOrDefault(item => item.Name == "Codex")
-            ?? throw new InvalidOperationException("未找到已创建的 Codex 令牌。");
-        var imageToken = tokens.Items.FirstOrDefault(item => item.Name == "生图")
-            ?? throw new InvalidOperationException("未找到已创建的生图令牌。");
-
-        var codexKey = await GetTokenKeyAsync(codexToken.Id, login.AccessToken, cancellationToken);
-        var imageKey = await GetTokenKeyAsync(imageToken.Id, login.AccessToken, cancellationToken);
-        account = account with { CodexKey = codexKey, ImageKey = imageKey };
-        await SaveAsync(account, cancellationToken);
-        return account;
+        _accessToken = login.AccessToken;
+        return _accessToken;
     }
 
     private async Task CreateTokenAsync(string name, string group, string accessToken, CancellationToken cancellationToken)

@@ -25,7 +25,7 @@ public sealed class AililiAccountServiceTests
             Assert.Equal(18, registered.Password.Length);
             Assert.Empty(registered.CodexKey);
             Assert.Empty(registered.ImageKey);
-            Assert.Equal(1, handler.RequestCount);
+            Assert.Equal(2, handler.RequestCount);
 
             var account = await service.CreateTokensAsync(cancellationToken: TestContext.Current.CancellationToken);
 
