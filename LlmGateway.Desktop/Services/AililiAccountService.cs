@@ -18,6 +18,7 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
 
     private readonly HttpClient _httpClient = httpClient ?? CreateHttpClient();
     private string? _accessToken;
+    private string? _userId;
 
     public AililiAccount? Load()
     {
@@ -97,7 +98,14 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
         }, null, cancellationToken);
 
         var accessToken = GetAccessToken(login);
+        var userId = GetUserId(login);
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            throw new InvalidOperationException("Ailili 登录成功，但未返回用户 ID，无法创建分组 Key。");
+        }
+
         _accessToken = accessToken;
+        _userId = userId;
     }
 
     private static HttpClient CreateHttpClient()
@@ -127,6 +135,33 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
             if (login.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String)
             {
                 return value.GetString();
+            }
+        }
+
+        return null;
+    }
+
+    private static string? GetUserId(JsonElement login)
+    {
+        if (login.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        foreach (var propertyName in new[] { "id", "user_id", "userId" })
+        {
+            if (!login.TryGetProperty(propertyName, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.String)
+            {
+                return value.GetString();
+            }
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var userId))
+            {
+                return userId.ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
         }
 
@@ -164,6 +199,10 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
         if (!string.IsNullOrWhiteSpace(accessToken))
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        }
+        if (!string.IsNullOrWhiteSpace(_userId))
+        {
+            request.Headers.TryAddWithoutValidation("New-Api-User", _userId);
         }
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);

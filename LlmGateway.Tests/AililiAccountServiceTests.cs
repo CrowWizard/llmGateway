@@ -60,11 +60,13 @@ public sealed class AililiAccountServiceTests
             }
             if (path == "/api/user/login")
             {
-                return Json("{\"success\":true,\"message\":\"\",\"data\":{\"accessToken\":\"access-token\"}}");
+                return Json("{\"success\":true,\"message\":\"\",\"data\":{\"accessToken\":\"access-token\",\"id\":123}}");
             }
 
             Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
             Assert.Equal("access-token", request.Headers.Authorization?.Parameter);
+            Assert.True(request.Headers.TryGetValues("New-Api-User", out var userIds));
+            Assert.Equal("123", Assert.Single(userIds));
             if (request.Method == HttpMethod.Post && path == "/api/token/")
             {
                 var body = await request.Content!.ReadAsStringAsync(cancellationToken);

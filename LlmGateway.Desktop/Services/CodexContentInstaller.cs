@@ -8,6 +8,7 @@ public static class CodexContentInstaller
     public static string Install(string sourceDirectory, string targetDirectory, string temporaryDirectory)
     {
         MoveToTemporary(targetDirectory, temporaryDirectory);
+        Directory.CreateDirectory(targetDirectory);
 
         foreach (var sourceFile in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
         {
