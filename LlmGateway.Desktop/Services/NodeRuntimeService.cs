@@ -46,9 +46,13 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
             ZipFile.ExtractToDirectory(archivePath, extractDirectory);
             var extractedRoot = Directory.EnumerateDirectories(extractDirectory).Single();
             var targetDirectory = Path.GetDirectoryName(managedNode)!;
-            WriteLog($"解压完成，移动运行时目录：{extractedRoot} -> {targetDirectory}");
+            var targetParentDirectory = Path.GetDirectoryName(targetDirectory)!;
+            WriteLog($"解压完成。源目录存在：{Directory.Exists(extractedRoot)}；目标目录存在：{Directory.Exists(targetDirectory)}；目标父目录存在：{Directory.Exists(targetParentDirectory)}。移动运行时目录：{extractedRoot} -> {targetDirectory}");
             CodexContentInstaller.MoveToTemporary(targetDirectory, paths.CodexTemporaryDirectory);
+            Directory.CreateDirectory(targetParentDirectory);
+            WriteLog($"已创建目标父目录：{targetParentDirectory}；准备移动。源目录存在：{Directory.Exists(extractedRoot)}；目标父目录存在：{Directory.Exists(targetParentDirectory)}。");
             Directory.Move(extractedRoot, targetDirectory);
+            WriteLog($"运行时目录移动完成。目标目录存在：{Directory.Exists(targetDirectory)}；node.exe 存在：{File.Exists(managedNode)}。");
 
             var installedVersion = await TryGetVersionAsync(managedNode)
                 ?? throw new InvalidOperationException("托管 Node.js 解压完成，但运行验证失败。");

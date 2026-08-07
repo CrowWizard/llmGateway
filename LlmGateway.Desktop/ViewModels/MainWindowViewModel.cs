@@ -453,7 +453,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 : models.Contains("gpt-image-2", StringComparer.Ordinal)
                     ? "gpt-image-2"
                     : models[0];
-            ImageGenerationStatus = $"已获取 {models.Count} 个模型，请选择生图模型。";
+            ImageGenerationStatus = $"已获取 {models.Count} 个模型，已默认选择：{ImageModel}。";
         }
         catch (Exception exception)
         {
