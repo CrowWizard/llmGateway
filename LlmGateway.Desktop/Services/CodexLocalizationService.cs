@@ -39,6 +39,12 @@ public sealed class CodexLocalizationService
             throw new FileNotFoundException("未找到 app.asar。", appAsarPath);
         }
 
+        if (IsStorePackagePath(appAsarPath))
+        {
+            throw new UnauthorizedAccessException(
+                "检测到 Microsoft Store 版 Codex 的 WindowsApps 安装目录。该目录受系统保护，无法安全原地修改；请安装当前用户可写的 Codex 桌面版后重试。");
+        }
+
         var data = File.ReadAllBytes(appAsarPath);
         var markerIndex = data.AsSpan().IndexOf(I18nMarker);
         if (markerIndex < 0)
@@ -64,6 +70,7 @@ public sealed class CodexLocalizationService
         {
             try
             {
+            Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
                 File.Copy(appAsarPath, backupPath);
                 File.SetAttributes(backupPath, FileAttributes.Normal);
             }
@@ -227,6 +234,14 @@ public sealed class CodexLocalizationService
         }
 
         return null;
+    }
+
+    private static bool IsStorePackagePath(string appAsarPath)
+    {
+        var windowsAppsDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "WindowsApps");
+        return appAsarPath.StartsWith(windowsAppsDirectory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 }
 

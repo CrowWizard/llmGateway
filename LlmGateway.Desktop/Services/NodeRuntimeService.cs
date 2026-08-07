@@ -41,7 +41,8 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
             WriteLog($"内置 Skill 已就绪，开始下载归档：{archivePath}");
             await DownloadArchiveAsync(platform, archivePath);
 
-            WriteLog($"归档下载完成，开始解压到：{extractDirectory}");
+            TryDeleteDirectory(extractDirectory);
+            WriteLog($"已删除旧解压目录，开始解压到：{extractDirectory}");
             ZipFile.ExtractToDirectory(archivePath, extractDirectory);
             var extractedRoot = Directory.EnumerateDirectories(extractDirectory).Single();
             var targetDirectory = Path.GetDirectoryName(managedNode)!;

@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -15,7 +16,7 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
         WriteIndented = true
     };
 
-    private readonly HttpClient _httpClient = httpClient ?? new HttpClient();
+    private readonly HttpClient _httpClient = httpClient ?? CreateHttpClient();
     private string? _accessToken;
 
     public AililiAccount? Load()
@@ -57,7 +58,12 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
     {
         account ??= Load() ?? throw new InvalidOperationException("请先注册 Ailili 账号。");
 
-        var accessToken = _accessToken ?? await LoginAsync(account, cancellationToken);
+        if (_accessToken is null)
+        {
+            await LoginAsync(account, cancellationToken);
+        }
+
+        var accessToken = _accessToken;
 
         var tokens = await SendAsync<TokenPage>(HttpMethod.Get, "/api/token/?p=0&page_size=20", null, accessToken, cancellationToken);
         if (tokens.Items.All(item => item.Name != "Codex"))
@@ -82,24 +88,52 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
         return account;
     }
 
-    private async Task<string> LoginAsync(AililiAccount account, CancellationToken cancellationToken)
+    private async Task LoginAsync(AililiAccount account, CancellationToken cancellationToken)
     {
-        var login = await SendAsync<LoginData>(HttpMethod.Post, "/api/user/login", new
+        var login = await SendAsync<JsonElement>(HttpMethod.Post, "/api/user/login", new
         {
             username = account.Username,
             password = account.Password
         }, null, cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(login.AccessToken))
-        {
-            throw new InvalidOperationException("Ailili 登录未返回访问令牌。");
-        }
-
-        _accessToken = login.AccessToken;
-        return _accessToken;
+        var accessToken = GetAccessToken(login);
+        _accessToken = accessToken;
     }
 
-    private async Task CreateTokenAsync(string name, string group, string accessToken, CancellationToken cancellationToken)
+    private static HttpClient CreateHttpClient()
+    {
+        var handler = new HttpClientHandler
+        {
+            CookieContainer = new CookieContainer(),
+            UseCookies = true
+        };
+        return new HttpClient(handler);
+    }
+
+    private static string? GetAccessToken(JsonElement login)
+    {
+        if (login.ValueKind == JsonValueKind.String)
+        {
+            return login.GetString();
+        }
+
+        if (login.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        foreach (var propertyName in new[] { "access_token", "accessToken", "token" })
+        {
+            if (login.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String)
+            {
+                return value.GetString();
+            }
+        }
+
+        return null;
+    }
+
+    private async Task CreateTokenAsync(string name, string group, string? accessToken, CancellationToken cancellationToken)
     {
         await SendAsync<object>(HttpMethod.Post, "/api/token/", new
         {
@@ -114,7 +148,7 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
         }, accessToken, cancellationToken);
     }
 
-    private async Task<string> GetTokenKeyAsync(int id, string accessToken, CancellationToken cancellationToken)
+    private async Task<string> GetTokenKeyAsync(int id, string? accessToken, CancellationToken cancellationToken)
     {
         var data = await SendAsync<TokenKeyData>(HttpMethod.Post, $"/api/token/{id}/key", new { }, accessToken, cancellationToken);
         return data.Key.StartsWith("sk-", StringComparison.Ordinal) ? data.Key : $"sk-{data.Key}";
@@ -166,7 +200,6 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
     }
 
     private sealed record ApiEnvelope<T>(bool Success, string Message, T? Data);
-    private sealed record LoginData([property: JsonPropertyName("access_token")] string AccessToken);
     private sealed record TokenPage([property: JsonPropertyName("items")] TokenItem[] Items);
     private sealed record TokenItem(int Id, string Name);
     private sealed record TokenKeyData(string Key);

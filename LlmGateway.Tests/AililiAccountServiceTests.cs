@@ -60,7 +60,7 @@ public sealed class AililiAccountServiceTests
             }
             if (path == "/api/user/login")
             {
-                return Json("{\"success\":true,\"message\":\"\",\"data\":{\"access_token\":\"access-token\"}}");
+                return Json("{\"success\":true,\"message\":\"\",\"data\":{\"accessToken\":\"access-token\"}}");
             }
 
             Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
