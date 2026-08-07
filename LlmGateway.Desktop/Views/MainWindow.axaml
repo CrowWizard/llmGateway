@@ -37,7 +37,10 @@
                   <TextBlock Classes="section-title" Text="Ailili 账号" />
                   <TextBlock Classes="caption" Text="自动注册账号，并分别创建 Codex 与生图分组 Key。" />
                 </StackPanel>
-                <Button Grid.Column="1" Classes="primary" Command="{Binding RegisterAililiCommand}" Content="自动注册并生成 Key" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                  <Button Classes="primary" Command="{Binding RegisterAililiCommand}" Content="注册账号" />
+                  <Button Classes="secondary" Command="{Binding CreateAililiTokensCommand}" Content="创建两个 Key" />
+                </StackPanel>
               </Grid>
               <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
                 <StackPanel Spacing="6">
@@ -115,16 +118,19 @@
           </Border>
 
           <Border Classes="feedback-panel">
-            <TextBox Text="{Binding CodexStatus}"
-                     FontSize="12"
-                     IsReadOnly="True"
-                     AcceptsReturn="True"
-                     TextWrapping="Wrap"
-                     MinHeight="52"
-                     BorderThickness="0"
-                     Background="Transparent"
-                     Padding="0"
-                     IsHitTestVisible="True" />
+            <StackPanel Spacing="6">
+              <TextBox Text="{Binding CodexStatus}"
+                       FontSize="12"
+                       IsReadOnly="True"
+                       AcceptsReturn="True"
+                       TextWrapping="Wrap"
+                       MinHeight="52"
+                       BorderThickness="0"
+                       Background="Transparent"
+                       Padding="0"
+                       IsHitTestVisible="True" />
+              <TextBlock Classes="caption" Text="{Binding ErrorLogPath, StringFormat='详细错误日志：{0}'}" TextWrapping="Wrap" />
+            </StackPanel>
           </Border>
 
           <Grid ColumnDefinitions="*,*" ColumnSpacing="16">

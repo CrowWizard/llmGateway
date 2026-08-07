@@ -21,6 +21,12 @@ public sealed class CodexLocalizationService
             return runningPath;
         }
 
+        var storePath = FindFromStorePackage();
+        if (storePath is not null)
+        {
+            return storePath;
+        }
+
         var installedPath = FindFromKnownLocations();
         return installedPath ?? throw new FileNotFoundException(
             "未找到 app.asar。请先启动 Codex/ChatGPT，或确认解压版与 Microsoft Store 版本已正确安装。");
@@ -152,6 +158,49 @@ public sealed class CodexLocalizationService
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ChatGPT", "resources", "app.asar")
         };
         return candidates.FirstOrDefault(File.Exists);
+    }
+
+    private static string? FindFromStorePackage()
+    {
+        const string script = "$ErrorActionPreference='SilentlyContinue'; Get-AppxPackage | Where-Object { $_.Name -match 'ChatGPT|Codex|OpenAI' -or $_.PackageFullName -match 'ChatGPT|Codex|OpenAI' } | ForEach-Object { [Console]::Out.WriteLine($_.InstallLocation) }";
+        foreach (var shell in new[] { "powershell.exe", "pwsh.exe" })
+        {
+            try
+            {
+                using var process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = shell,
+                    Arguments = $"-NoLogo -NoProfile -NonInteractive -Command \"{script.Replace("\"", "\\\"")}\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                });
+                if (process is null)
+                {
+                    continue;
+                }
+
+                var output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit(5000);
+                foreach (var installLocation in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+                {
+                    foreach (var relativePath in new[] { Path.Combine("resources", "app.asar"), Path.Combine("app", "resources", "app.asar") })
+                    {
+                        var candidate = Path.Combine(installLocation.Trim(), relativePath);
+                        if (File.Exists(candidate))
+                        {
+                            return candidate;
+                        }
+                    }
+                }
+            }
+            catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+            }
+        }
+
+        return null;
     }
 
     private static string? FindAppAsarNear(string executablePath)

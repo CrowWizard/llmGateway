@@ -9,7 +9,7 @@ namespace LlmGateway.Tests;
 public sealed class AililiAccountServiceTests
 {
     [Fact]
-    public async Task RegisterAsyncCreatesTwoKeysAndSavesCredentials()
+    public async Task RegistrationAndTokenCreationAreSeparateAndSaveCredentials()
     {
         var root = Path.Combine(Path.GetTempPath(), $"llm-gateway-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
@@ -19,13 +19,19 @@ public sealed class AililiAccountServiceTests
             var paths = new AppPaths(root, root);
             var service = new AililiAccountService(paths, new HttpClient(handler));
 
-            var account = await service.RegisterAsync(TestContext.Current.CancellationToken);
+            var registered = await service.RegisterAccountAsync(TestContext.Current.CancellationToken);
 
-            Assert.StartsWith("codex_", account.Username);
-            Assert.Equal(18, account.Password.Length);
+            Assert.StartsWith("codex_", registered.Username);
+            Assert.Equal(18, registered.Password.Length);
+            Assert.Empty(registered.CodexKey);
+            Assert.Empty(registered.ImageKey);
+            Assert.Equal(1, handler.RequestCount);
+
+            var account = await service.CreateTokensAsync(cancellationToken: TestContext.Current.CancellationToken);
+
             Assert.Equal("sk-codex-key", account.CodexKey);
             Assert.Equal("sk-image-key", account.ImageKey);
-            Assert.Equal(7, handler.RequestCount);
+            Assert.Equal(8, handler.RequestCount);
             Assert.True(File.Exists(paths.AililiCredentialsPath));
             var saved = service.Load();
             Assert.Equal(account, saved);
@@ -46,6 +52,10 @@ public sealed class AililiAccountServiceTests
             var path = request.RequestUri!.PathAndQuery;
             if (path == "/api/user/register")
             {
+                var body = await request.Content!.ReadAsStringAsync(cancellationToken);
+                using var payload = JsonDocument.Parse(body);
+                Assert.Equal(payload.RootElement.GetProperty("password").GetString(), payload.RootElement.GetProperty("password2").GetString());
+                Assert.Equal(string.Empty, payload.RootElement.GetProperty("aff_code").GetString());
                 return Json("{\"success\":true,\"message\":\"\"}");
             }
             if (path == "/api/user/login")
@@ -59,14 +69,16 @@ public sealed class AililiAccountServiceTests
             {
                 var body = await request.Content!.ReadAsStringAsync(cancellationToken);
                 Assert.Contains("\"unlimited_quota\":true", body);
-                Assert.Contains(RequestCount == 3
+                Assert.Contains(RequestCount == 4
                     ? "\"group\":\"OpenAI-gpt\""
                     : "\"group\":\"gpt-image-2\"", body);
                 return Json("{\"success\":true,\"message\":\"\"}");
             }
             if (request.Method == HttpMethod.Get && path == "/api/token/?p=0&page_size=20")
             {
-                return Json("{\"success\":true,\"message\":\"\",\"data\":{\"items\":[{\"id\":11,\"name\":\"Codex\"},{\"id\":12,\"name\":\"生图\"}]}}");
+                return RequestCount == 3
+                    ? Json("{\"success\":true,\"message\":\"\",\"data\":{\"items\":[]}}")
+                    : Json("{\"success\":true,\"message\":\"\",\"data\":{\"items\":[{\"id\":11,\"name\":\"Codex\"},{\"id\":12,\"name\":\"生图\"}]}}");
             }
             if (path == "/api/token/11/key")
             {

@@ -29,19 +29,36 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
 
     public async Task<AililiAccount> RegisterAsync(CancellationToken cancellationToken = default)
     {
+        var account = await RegisterAccountAsync(cancellationToken);
+        return await CreateTokensAsync(account, cancellationToken);
+    }
+
+    public async Task<AililiAccount> RegisterAccountAsync(CancellationToken cancellationToken = default)
+    {
         var username = $"codex_{Convert.ToHexString(RandomNumberGenerator.GetBytes(6)).ToLowerInvariant()}";
         var password = CreatePassword();
 
         await SendAsync<object>(HttpMethod.Post, "/api/user/register", new
         {
             username,
-            password
+            password,
+            password2 = password,
+            aff_code = ""
         }, null, cancellationToken);
+
+        var account = new AililiAccount(username, password, string.Empty, string.Empty);
+        await SaveAsync(account, cancellationToken);
+        return account;
+    }
+
+    public async Task<AililiAccount> CreateTokensAsync(AililiAccount? account = null, CancellationToken cancellationToken = default)
+    {
+        account ??= Load() ?? throw new InvalidOperationException("请先注册 Ailili 账号。");
 
         var login = await SendAsync<LoginData>(HttpMethod.Post, "/api/user/login", new
         {
-            username,
-            password
+            username = account.Username,
+            password = account.Password
         }, null, cancellationToken);
 
         if (string.IsNullOrWhiteSpace(login.AccessToken))
@@ -49,10 +66,17 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
             throw new InvalidOperationException("Ailili 登录未返回访问令牌。");
         }
 
-        await CreateTokenAsync("Codex", "OpenAI-gpt", login.AccessToken, cancellationToken);
-        await CreateTokenAsync("生图", "gpt-image-2", login.AccessToken, cancellationToken);
-
         var tokens = await SendAsync<TokenPage>(HttpMethod.Get, "/api/token/?p=0&page_size=20", null, login.AccessToken, cancellationToken);
+        if (tokens.Items.All(item => item.Name != "Codex"))
+        {
+            await CreateTokenAsync("Codex", "OpenAI-gpt", login.AccessToken, cancellationToken);
+        }
+        if (tokens.Items.All(item => item.Name != "生图"))
+        {
+            await CreateTokenAsync("生图", "gpt-image-2", login.AccessToken, cancellationToken);
+        }
+
+        tokens = await SendAsync<TokenPage>(HttpMethod.Get, "/api/token/?p=0&page_size=20", null, login.AccessToken, cancellationToken);
         var codexToken = tokens.Items.FirstOrDefault(item => item.Name == "Codex")
             ?? throw new InvalidOperationException("未找到已创建的 Codex 令牌。");
         var imageToken = tokens.Items.FirstOrDefault(item => item.Name == "生图")
@@ -60,7 +84,7 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
 
         var codexKey = await GetTokenKeyAsync(codexToken.Id, login.AccessToken, cancellationToken);
         var imageKey = await GetTokenKeyAsync(imageToken.Id, login.AccessToken, cancellationToken);
-        var account = new AililiAccount(username, password, codexKey, imageKey);
+        account = account with { CodexKey = codexKey, ImageKey = imageKey };
         await SaveAsync(account, cancellationToken);
         return account;
     }

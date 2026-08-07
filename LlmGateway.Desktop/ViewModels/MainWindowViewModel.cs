@@ -102,7 +102,8 @@ public sealed class MainWindowViewModel : ObservableObject
         InstallImageGenAutoCommand = new AsyncCommand(InstallImageGenAutoAsync);
         EnsureNodeCommand = new AsyncCommand(EnsureNodeAsync);
         EnableChineseLocalizationCommand = new AsyncCommand(EnableChineseLocalizationAsync);
-        RegisterAililiCommand = new AsyncCommand(RegisterAililiAsync);
+        RegisterAililiCommand = new AsyncCommand(RegisterAililiAccountAsync);
+        CreateAililiTokensCommand = new AsyncCommand(CreateAililiTokensAsync);
         ToggleApiKeyCommand = new AsyncCommand(() =>
         {
             IsApiKeyVisible = !IsApiKeyVisible;
@@ -145,6 +146,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand EnsureNodeCommand { get; }
     public AsyncCommand EnableChineseLocalizationCommand { get; }
     public AsyncCommand RegisterAililiCommand { get; }
+    public AsyncCommand CreateAililiTokensCommand { get; }
     public AsyncCommand ToggleApiKeyCommand { get; }
     public AsyncCommand ClearLogsCommand { get; }
 
@@ -240,6 +242,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public string AililiImageKey { get => _aililiImageKey; private set => SetProperty(ref _aililiImageKey, value); }
     public string AililiStatus { get => _aililiStatus; private set => SetProperty(ref _aililiStatus, value); }
     public string AililiCredentialsPath => _paths.AililiCredentialsPath;
+    public string ErrorLogPath => _errorLogService.LogPath;
     public string CodexDirectory => _paths.CodexDirectory;
 
     private void Load()
@@ -263,22 +266,38 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    private async Task RegisterAililiAsync()
+    private async Task RegisterAililiAccountAsync()
     {
         try
         {
-            AililiStatus = "正在注册账号并创建两个分组 Key…";
-            var account = await _aililiAccountService.RegisterAsync();
+            AililiStatus = "正在注册 Ailili 账号…";
+            var account = await _aililiAccountService.RegisterAccountAsync();
+            ApplyAililiAccount(account);
+            AililiStatus = "Ailili 账号注册成功，请继续创建两个分组 Key。";
+        }
+        catch (Exception exception)
+        {
+            LogError("注册 Ailili 账号", exception);
+            AililiStatus = $"自动注册失败：{exception.Message}";
+        }
+    }
+
+    private async Task CreateAililiTokensAsync()
+    {
+        try
+        {
+            AililiStatus = "正在登录并创建两个分组 Key…";
+            var account = await _aililiAccountService.CreateTokensAsync();
             ApplyAililiAccount(account);
             ApiKey = account.CodexKey;
             ImageApiKey = account.ImageKey;
             CodexBaseUrl = "https://api.ailili.chat/v1";
-            AililiStatus = "账号和两个 Key 已创建，并已填入连接配置。";
+            AililiStatus = "两个分组 Key 已创建，并已填入连接配置。";
         }
         catch (Exception exception)
         {
-            LogError("自动注册 Ailili 账号", exception);
-            AililiStatus = $"自动注册失败：{exception.Message}";
+            LogError("创建 Ailili 分组 Key", exception);
+            AililiStatus = $"创建令牌失败：{exception.Message}";
         }
     }
 
