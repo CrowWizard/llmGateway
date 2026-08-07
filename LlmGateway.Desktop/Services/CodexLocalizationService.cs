@@ -1,248 +1,82 @@
-using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace LlmGateway.Desktop.Services;
 
-public sealed class CodexLocalizationService
+public sealed class CodexLocalizationService(string? applicationDataDirectory = null, string? codexDirectory = null)
 {
-    private static readonly byte[] I18nMarker = "enable_i18n"u8.ToArray();
-    private static readonly byte[] DisabledExpression = ",!1)"u8.ToArray();
-    private static readonly byte[] EnabledExpression = ",!0)"u8.ToArray();
+    private const string ChineseLanguages = "zh-CN,zh,en-US,en";
 
-    public string FindAppAsarPath()
+    private readonly string _applicationDataDirectory = applicationDataDirectory
+        ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+    private readonly string _codexDirectory = codexDirectory
+        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
+
+    public string PreferencesPath => Path.Combine(_applicationDataDirectory, "Codex", "web", "Codex", "Default", "Preferences");
+    public string LocalStatePath => Path.Combine(_applicationDataDirectory, "Codex", "web", "Codex", "Local State");
+    public string ConfigPath => Path.Combine(_codexDirectory, "config.toml");
+
+    public async Task<LocalizationResult> EnableChineseAsync(CancellationToken cancellationToken = default)
     {
-        if (!OperatingSystem.IsWindows())
+        await WriteJsonAsync(PreferencesPath, root =>
         {
-            throw new PlatformNotSupportedException("界面汉化仅支持 Windows 上的 Codex 桌面应用。");
-        }
+            var intl = GetOrCreateObject(root, "intl");
+            intl["selected_languages"] = ChineseLanguages;
+            root["accept_languages"] = ChineseLanguages;
+        }, cancellationToken);
 
-        var runningPath = FindFromRunningProcess();
-        if (runningPath is not null)
+        await WriteJsonAsync(LocalStatePath, root =>
         {
-            return runningPath;
-        }
+            var intl = GetOrCreateObject(root, "intl");
+            intl["app_locale"] = "zh-CN";
+        }, cancellationToken);
 
-        var storePath = FindFromStorePackage();
-        if (storePath is not null)
-        {
-            return storePath;
-        }
-
-        var installedPath = FindFromKnownLocations();
-        return installedPath ?? throw new FileNotFoundException(
-            "未找到 app.asar。请先启动 Codex/ChatGPT，或确认解压版与 Microsoft Store 版本已正确安装。");
+        var config = AtomicFile.ReadUtf8(ConfigPath);
+        await AtomicFile.WriteUtf8Async(ConfigPath, SetDeveloperInstructions(config), cancellationToken);
+        return new LocalizationResult(PreferencesPath, LocalStatePath, ConfigPath, "界面与默认回复语言已设置为简体中文，重启 Codex 后生效。");
     }
 
-    public LocalizationResult EnableChinese(string appAsarPath)
+    private static async Task WriteJsonAsync(string path, Action<JsonObject> update, CancellationToken cancellationToken)
     {
-        if (!File.Exists(appAsarPath))
-        {
-            throw new FileNotFoundException("未找到 app.asar。", appAsarPath);
-        }
-
-        if (IsStorePackagePath(appAsarPath))
-        {
-            throw new UnauthorizedAccessException(
-                "检测到 Microsoft Store 版 Codex 的 WindowsApps 安装目录。该目录受系统保护，无法安全原地修改；请安装当前用户可写的 Codex 桌面版后重试。");
-        }
-
-        var data = File.ReadAllBytes(appAsarPath);
-        var markerIndex = data.AsSpan().IndexOf(I18nMarker);
-        if (markerIndex < 0)
-        {
-            throw new InvalidDataException("当前 app.asar 中未找到 enable_i18n，可能是不受支持的 Codex 版本。");
-        }
-
-        var searchLength = Math.Min(20, data.Length - markerIndex);
-        var expression = data.AsSpan(markerIndex, searchLength);
-        var disabledIndex = expression.IndexOf(DisabledExpression);
-        if (disabledIndex < 0)
-        {
-            if (expression.IndexOf(EnabledExpression) >= 0)
-            {
-                return new LocalizationResult(appAsarPath, false, null, "界面汉化已启用，无需重复修改。");
-            }
-
-            throw new InvalidDataException("未找到预期的 !1 开关，已取消修改以避免破坏 app.asar。");
-        }
-
-        var backupPath = appAsarPath + ".bak";
-        if (!File.Exists(backupPath))
-        {
-            try
-            {
-            Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
-                File.Copy(appAsarPath, backupPath);
-                File.SetAttributes(backupPath, FileAttributes.Normal);
-            }
-            catch (UnauthorizedAccessException exception)
-            {
-                throw new UnauthorizedAccessException(
-                    "无法创建 app.asar 备份，请以管理员身份运行，或将 Codex 安装到当前用户可写目录后重试。", exception);
-            }
-        }
-
-        data[markerIndex + disabledIndex + 2] = (byte)'0';
-        var temporaryPath = appAsarPath + $".{Guid.NewGuid():N}.tmp";
+        var input = AtomicFile.ReadUtf8(path);
+        JsonObject root;
         try
         {
-            File.SetAttributes(appAsarPath, FileAttributes.Normal);
-            File.WriteAllBytes(temporaryPath, data);
-            File.Move(temporaryPath, appAsarPath, true);
+            root = string.IsNullOrWhiteSpace(input)
+                ? []
+                : JsonNode.Parse(input)?.AsObject() ?? throw new InvalidDataException($"{path} 的根节点不是 JSON 对象。");
         }
-        catch (UnauthorizedAccessException exception)
+        catch (JsonException exception)
         {
-            throw new UnauthorizedAccessException(
-                "无法修改 app.asar。请以管理员身份运行应用，并确认 Codex/ChatGPT 已完全退出。", exception);
-        }
-        finally
-        {
-            if (File.Exists(temporaryPath))
-            {
-                File.Delete(temporaryPath);
-            }
+            throw new InvalidDataException($"无法解析 Codex 配置文件：{path}", exception);
         }
 
-        var verification = File.ReadAllBytes(appAsarPath);
-        var verificationMarker = verification.AsSpan().IndexOf(I18nMarker);
-        var verified = verificationMarker >= 0 &&
-            verification.AsSpan(verificationMarker, Math.Min(20, verification.Length - verificationMarker)).IndexOf(EnabledExpression) >= 0;
-        if (!verified)
-        {
-            throw new InvalidDataException("写入后的 app.asar 校验失败，请使用 .bak 备份还原。");
-        }
-
-        return new LocalizationResult(appAsarPath, true, backupPath, "界面汉化已启用，重启 Codex/ChatGPT 后生效。");
+        update(root);
+        var output = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine;
+        await AtomicFile.WriteUtf8Async(path, output, cancellationToken);
     }
 
-    private static string? FindFromRunningProcess()
+    private static JsonObject GetOrCreateObject(JsonObject root, string name)
     {
-        foreach (var processName in new[] { "Codex", "codex", "ChatGPT", "chatgpt" })
+        if (root[name] is JsonObject existing)
         {
-            foreach (var process in Process.GetProcessesByName(processName))
-            {
-                try
-                {
-                    var executablePath = process.MainModule?.FileName;
-                    var appAsarPath = executablePath is null ? null : FindAppAsarNear(executablePath);
-                    if (appAsarPath is not null)
-                    {
-                        return appAsarPath;
-                    }
-                }
-                catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
-                {
-                }
-                finally
-                {
-                    process.Dispose();
-                }
-            }
+            return existing;
         }
 
-        return null;
+        var created = new JsonObject();
+        root[name] = created;
+        return created;
     }
 
-    private static string? FindFromKnownLocations()
+    private static string SetDeveloperInstructions(string input)
     {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var packageRoot = Path.Combine(localAppData, "Packages");
-        if (Directory.Exists(packageRoot))
-        {
-            foreach (var package in Directory.EnumerateDirectories(packageRoot, "OpenAI.Codex_*"))
-            {
-                var appAsarPath = Path.Combine(package, "app", "resources", "app.asar");
-                if (File.Exists(appAsarPath))
-                {
-                    return appAsarPath;
-                }
-            }
-        }
-
-        var candidates = new[]
-        {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Codex", "resources", "app.asar"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Codex", "resources", "app.asar"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ChatGPT", "resources", "app.asar")
-        };
-        return candidates.FirstOrDefault(File.Exists);
-    }
-
-    private static string? FindFromStorePackage()
-    {
-        const string script = "$ErrorActionPreference='SilentlyContinue'; Get-AppxPackage | Where-Object { $_.Name -match 'ChatGPT|Codex|OpenAI' -or $_.PackageFullName -match 'ChatGPT|Codex|OpenAI' } | ForEach-Object { [Console]::Out.WriteLine($_.InstallLocation) }";
-        foreach (var shell in new[] { "powershell.exe", "pwsh.exe" })
-        {
-            try
-            {
-                using var process = Process.Start(new ProcessStartInfo
-                {
-                    FileName = shell,
-                    Arguments = $"-NoLogo -NoProfile -NonInteractive -Command \"{script.Replace("\"", "\\\"")}\"",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                });
-                if (process is null)
-                {
-                    continue;
-                }
-
-                var output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit(5000);
-                foreach (var installLocation in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
-                {
-                    foreach (var relativePath in new[] { Path.Combine("resources", "app.asar"), Path.Combine("app", "resources", "app.asar") })
-                    {
-                        var candidate = Path.Combine(installLocation.Trim(), relativePath);
-                        if (File.Exists(candidate))
-                        {
-                            return candidate;
-                        }
-                    }
-                }
-            }
-            catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
-            {
-            }
-        }
-
-        return null;
-    }
-
-    private static string? FindAppAsarNear(string executablePath)
-    {
-        var executableDirectory = Path.GetDirectoryName(executablePath);
-        if (string.IsNullOrWhiteSpace(executableDirectory))
-        {
-            return null;
-        }
-
-        var directories = new[]
-        {
-            executableDirectory,
-            Directory.GetParent(executableDirectory)?.FullName,
-            Directory.GetParent(executableDirectory)?.Parent?.FullName
-        };
-        foreach (var directory in directories.Where(directory => !string.IsNullOrWhiteSpace(directory)))
-        {
-            var appAsarPath = Path.Combine(directory!, "resources", "app.asar");
-            if (File.Exists(appAsarPath))
-            {
-                return appAsarPath;
-            }
-        }
-
-        return null;
-    }
-
-    private static bool IsStorePackagePath(string appAsarPath)
-    {
-        var windowsAppsDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            "WindowsApps");
-        return appAsarPath.StartsWith(windowsAppsDirectory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        const string replacement = "developer_instructions = \"请始终使用简体中文进行交流和输出。\"";
+        var expression = new Regex("^\\s*developer_instructions\\s*=.*$", RegexOptions.Multiline | RegexOptions.CultureInvariant);
+        return expression.IsMatch(input)
+            ? expression.Replace(input, replacement)
+            : input.TrimEnd() + Environment.NewLine + replacement + Environment.NewLine;
     }
 }
 
-public sealed record LocalizationResult(string AppAsarPath, bool Changed, string? BackupPath, string Message);
+public sealed record LocalizationResult(string PreferencesPath, string LocalStatePath, string ConfigPath, string Message);

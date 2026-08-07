@@ -9,7 +9,6 @@
     <Product>Codex 配置</Product>
     <Description>Codex 模型、凭据与兼容连接配置工具</Description>
     <ApplicationIcon>Assets/codex-config.ico</ApplicationIcon>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
     <Version>1.0.0</Version>
   </PropertyGroup>
 

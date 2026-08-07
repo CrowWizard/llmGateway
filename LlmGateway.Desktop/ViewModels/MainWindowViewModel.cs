@@ -586,11 +586,10 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         try
         {
-            CodexStatus = "正在定位 Codex 的 app.asar…";
-            var appAsarPath = _localizationService.FindAppAsarPath();
+            CodexStatus = "正在关闭 Codex 并写入中文语言偏好…";
             await _launcher.CloseManagedClientsAsync();
-            var result = _localizationService.EnableChinese(appAsarPath);
-            CodexStatus = $"{result.Message} 路径：{result.AppAsarPath}";
+            var result = await _localizationService.EnableChineseAsync();
+            CodexStatus = $"{result.Message} Preferences：{result.PreferencesPath}";
         }
         catch (Exception exception)
         {
