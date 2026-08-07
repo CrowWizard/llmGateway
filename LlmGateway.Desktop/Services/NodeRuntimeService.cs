@@ -17,11 +17,22 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
         var managedVersion = await TryGetVersionAsync(managedNode);
         if (managedVersion is not null)
         {
-            if (!File.Exists(Path.Combine(paths.NodeRuntimeSkillDirectory, "node_modules", "sharp", "package.json")))
+            var restoredSkill = false;
+            if (!HasRuntimeSkill())
+            {
+                await RestoreRuntimeSkillFilesAsync();
+                restoredSkill = true;
+            }
+
+            var installedPackages = HasSharedPackages();
+            if (!installedPackages)
             {
                 await InstallSharedPackagesAsync(managedNode, Path.GetDirectoryName(managedNode)!);
             }
-            return $"托管 Node.js 已就绪：{managedNode} {managedVersion}";
+
+            return restoredSkill || !installedPackages
+                ? $"托管 Node.js 已就绪，已补齐{(restoredSkill ? " Skill 文件" : string.Empty)}{(restoredSkill && !installedPackages ? "和" : string.Empty)}{(!installedPackages ? "共享依赖" : string.Empty)}：{managedNode} {managedVersion}"
+                : $"托管 Node.js 已就绪，无需重复安装：{managedNode} {managedVersion}";
         }
 
         var platform = GetPlatformPackage();
@@ -88,6 +99,29 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
 
         await CodexContentInstaller.InstallAsync(paths.NodeRuntimeSourceDirectory, paths.NodeRuntimeSkillDirectory, paths.CodexTemporaryDirectory);
     }
+
+    private bool HasRuntimeSkill() =>
+        File.Exists(Path.Combine(paths.NodeRuntimeSkillDirectory, "SKILL.md")) &&
+        File.Exists(Path.Combine(paths.NodeRuntimeSkillDirectory, "scripts", "runtime.mjs"));
+
+    private bool HasSharedPackages() =>
+        File.Exists(Path.Combine(paths.NodeRuntimeSkillDirectory, "node_modules", "sharp", "package.json"));
+
+    private Task RestoreRuntimeSkillFilesAsync() => Task.Run(() =>
+    {
+        if (!File.Exists(Path.Combine(paths.NodeRuntimeSourceDirectory, "SKILL.md")))
+        {
+            throw new InvalidOperationException("未找到内置 noderuntime Skill。请重新安装应用。");
+        }
+
+        foreach (var sourceFile in Directory.EnumerateFiles(paths.NodeRuntimeSourceDirectory, "*", SearchOption.AllDirectories))
+        {
+            var relativePath = Path.GetRelativePath(paths.NodeRuntimeSourceDirectory, sourceFile);
+            var targetFile = Path.Combine(paths.NodeRuntimeSkillDirectory, relativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(targetFile)!);
+            File.Copy(sourceFile, targetFile, true);
+        }
+    });
 
     private async Task DownloadArchiveAsync(PlatformPackage platform, string archivePath)
     {

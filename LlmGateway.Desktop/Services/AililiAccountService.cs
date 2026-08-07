@@ -36,10 +36,12 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
         return await CreateTokensAsync(account, cancellationToken);
     }
 
-    public async Task<AililiAccount> RegisterAccountAsync(CancellationToken cancellationToken = default)
+    public async Task<AililiAccount> RegisterAccountAsync(CancellationToken cancellationToken = default, string? username = null, string? password = null)
     {
-        var username = $"codex_{Convert.ToHexString(RandomNumberGenerator.GetBytes(6)).ToLowerInvariant()}";
-        var password = CreatePassword();
+        username = string.IsNullOrWhiteSpace(username)
+            ? $"codex_{Convert.ToHexString(RandomNumberGenerator.GetBytes(6)).ToLowerInvariant()}"
+            : username.Trim();
+        password = string.IsNullOrWhiteSpace(password) ? CreatePassword() : password;
 
         await SendAsync<object>(HttpMethod.Post, "/api/user/register", new
         {
@@ -52,6 +54,19 @@ public sealed class AililiAccountService(AppPaths paths, HttpClient? httpClient 
         var account = new AililiAccount(username, password, string.Empty, string.Empty);
         await SaveAsync(account, cancellationToken);
         await LoginAsync(account, cancellationToken);
+        return account;
+    }
+
+    public async Task<AililiAccount> LoginAsync(string username, string password, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+        {
+            throw new InvalidOperationException("请输入 Ailili 用户名和密码。");
+        }
+
+        var account = new AililiAccount(username.Trim(), password, string.Empty, string.Empty);
+        await LoginAsync(account, cancellationToken);
+        await SaveAsync(account, cancellationToken);
         return account;
     }
 

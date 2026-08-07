@@ -39,17 +39,21 @@
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                   <Button Classes="primary" Command="{Binding RegisterAililiCommand}" Content="注册账号" />
+                  <Button Classes="secondary" Command="{Binding LoginAililiCommand}" Content="登录" />
                   <Button Classes="secondary" Command="{Binding CreateAililiTokensCommand}" Content="创建两个 Key" />
                 </StackPanel>
               </Grid>
               <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
                 <StackPanel Spacing="6">
                   <TextBlock Classes="caption" Text="用户名" />
-                  <TextBox Text="{Binding AililiUsername}" IsReadOnly="True" PlaceholderText="注册后显示" />
+                  <TextBox Text="{Binding AililiUsername}" PlaceholderText="留空则自动生成" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Spacing="6">
                   <TextBlock Classes="caption" Text="密码" />
-                  <TextBox Text="{Binding AililiPassword}" IsReadOnly="True" PlaceholderText="注册后显示" />
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBox Text="{Binding AililiPassword}" PasswordChar="●" RevealPassword="{Binding IsAililiPasswordVisible}" PlaceholderText="留空则自动生成" />
+                    <Button Grid.Column="1" Classes="ghost" Command="{Binding ToggleAililiPasswordCommand}" Content="显示" />
+                  </Grid>
                 </StackPanel>
               </Grid>
               <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
@@ -167,9 +171,9 @@
                 <TextBlock Classes="caption" Text="安装电商与兼容版生图 Skill，共用应用托管的 Node.js 运行环境。" TextWrapping="Wrap" />
               </StackPanel>
               <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
-                <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallEcommerceImageStudioCommand}" Content="安装电商生图 Skill" />
-                <Button Grid.Column="1" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallImageGenAutoCommand}" Content="安装兼容版生图 Skill" />
-                <Button Grid.Column="2" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding EnsureNodeCommand}" Content="安装 Node 运行时" />
+                <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding EnsureNodeCommand}" Content="安装 Node 运行时" />
+                <Button Grid.Column="1" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallEcommerceImageStudioCommand}" Content="安装电商生图 Skill" />
+                <Button Grid.Column="2" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallImageGenAutoCommand}" Content="安装兼容版生图 Skill" />
               </Grid>
               <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding EnableChineseLocalizationCommand}" Content="启用 Codex 界面汉化" />
             </StackPanel>

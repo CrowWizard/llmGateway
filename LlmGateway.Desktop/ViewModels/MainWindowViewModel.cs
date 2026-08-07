@@ -46,6 +46,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _codexStatus = "就绪";
     private string _applicationStatus = string.Empty;
     private bool _isApiKeyVisible;
+    private bool _isAililiPasswordVisible;
     private string _aililiUsername = string.Empty;
     private string _aililiPassword = string.Empty;
     private string _aililiCodexKey = string.Empty;
@@ -103,10 +104,16 @@ public sealed class MainWindowViewModel : ObservableObject
         EnsureNodeCommand = new AsyncCommand(EnsureNodeAsync);
         EnableChineseLocalizationCommand = new AsyncCommand(EnableChineseLocalizationAsync);
         RegisterAililiCommand = new AsyncCommand(RegisterAililiAccountAsync);
+        LoginAililiCommand = new AsyncCommand(LoginAililiAccountAsync);
         CreateAililiTokensCommand = new AsyncCommand(CreateAililiTokensAsync);
         ToggleApiKeyCommand = new AsyncCommand(() =>
         {
             IsApiKeyVisible = !IsApiKeyVisible;
+            return Task.CompletedTask;
+        });
+        ToggleAililiPasswordCommand = new AsyncCommand(() =>
+        {
+            IsAililiPasswordVisible = !IsAililiPasswordVisible;
             return Task.CompletedTask;
         });
         ClearLogsCommand = new AsyncCommand(() =>
@@ -146,8 +153,10 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand EnsureNodeCommand { get; }
     public AsyncCommand EnableChineseLocalizationCommand { get; }
     public AsyncCommand RegisterAililiCommand { get; }
+    public AsyncCommand LoginAililiCommand { get; }
     public AsyncCommand CreateAililiTokensCommand { get; }
     public AsyncCommand ToggleApiKeyCommand { get; }
+    public AsyncCommand ToggleAililiPasswordCommand { get; }
     public AsyncCommand ClearLogsCommand { get; }
 
     public string LocalBindIp { get => _localBindIp; set => SetProperty(ref _localBindIp, value); }
@@ -236,8 +245,9 @@ public sealed class MainWindowViewModel : ObservableObject
     public string CodexStatus { get => _codexStatus; private set => SetProperty(ref _codexStatus, value); }
     public string ApplicationStatus { get => _applicationStatus; private set => SetProperty(ref _applicationStatus, value); }
     public bool IsApiKeyVisible { get => _isApiKeyVisible; set => SetProperty(ref _isApiKeyVisible, value); }
-    public string AililiUsername { get => _aililiUsername; private set => SetProperty(ref _aililiUsername, value); }
-    public string AililiPassword { get => _aililiPassword; private set => SetProperty(ref _aililiPassword, value); }
+    public bool IsAililiPasswordVisible { get => _isAililiPasswordVisible; set => SetProperty(ref _isAililiPasswordVisible, value); }
+    public string AililiUsername { get => _aililiUsername; set => SetProperty(ref _aililiUsername, value); }
+    public string AililiPassword { get => _aililiPassword; set => SetProperty(ref _aililiPassword, value); }
     public string AililiCodexKey { get => _aililiCodexKey; private set => SetProperty(ref _aililiCodexKey, value); }
     public string AililiImageKey { get => _aililiImageKey; private set => SetProperty(ref _aililiImageKey, value); }
     public string AililiStatus { get => _aililiStatus; private set => SetProperty(ref _aililiStatus, value); }
@@ -271,7 +281,7 @@ public sealed class MainWindowViewModel : ObservableObject
         try
         {
             AililiStatus = "正在注册 Ailili 账号…";
-            var account = await _aililiAccountService.RegisterAccountAsync();
+            var account = await _aililiAccountService.RegisterAccountAsync(username: AililiUsername, password: AililiPassword);
             ApplyAililiAccount(account);
             AililiStatus = "Ailili 账号注册并登录成功，请继续创建两个分组 Key。";
         }
@@ -279,6 +289,22 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             LogError("注册 Ailili 账号", exception);
             AililiStatus = $"自动注册失败：{exception.Message}";
+        }
+    }
+
+    private async Task LoginAililiAccountAsync()
+    {
+        try
+        {
+            AililiStatus = "正在登录 Ailili 账号…";
+            var account = await _aililiAccountService.LoginAsync(AililiUsername, AililiPassword);
+            ApplyAililiAccount(account);
+            AililiStatus = "Ailili 登录成功，现在可以创建两个分组 Key。";
+        }
+        catch (Exception exception)
+        {
+            LogError("登录 Ailili 账号", exception);
+            AililiStatus = $"登录失败：{exception.Message}";
         }
     }
 
