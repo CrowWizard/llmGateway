@@ -22,6 +22,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly ApplicationLauncher _launcher;
     private readonly CodexLocalizationService _localizationService;
     private readonly NodeRuntimeService _nodeRuntimeService;
+    private readonly AililiAccountService _aililiAccountService;
+    private readonly ErrorLogService _errorLogService;
     private readonly AsyncCommand _startGatewayCommand;
     private readonly AsyncCommand _stopGatewayCommand;
 
@@ -44,6 +46,11 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _codexStatus = "就绪";
     private string _applicationStatus = string.Empty;
     private bool _isApiKeyVisible;
+    private string _aililiUsername = string.Empty;
+    private string _aililiPassword = string.Empty;
+    private string _aililiCodexKey = string.Empty;
+    private string _aililiImageKey = string.Empty;
+    private string _aililiStatus = "尚未创建账号";
 
     public MainWindowViewModel(
         AppPaths paths,
@@ -59,7 +66,9 @@ public sealed class MainWindowViewModel : ObservableObject
         ModelService modelService,
         ApplicationLauncher launcher,
         CodexLocalizationService localizationService,
-        NodeRuntimeService nodeRuntimeService)
+        NodeRuntimeService nodeRuntimeService,
+        AililiAccountService aililiAccountService,
+        ErrorLogService errorLogService)
     {
         _paths = paths;
         _gatewaySettingsService = gatewaySettingsService;
@@ -75,6 +84,8 @@ public sealed class MainWindowViewModel : ObservableObject
         _launcher = launcher;
         _localizationService = localizationService;
         _nodeRuntimeService = nodeRuntimeService;
+        _aililiAccountService = aililiAccountService;
+        _errorLogService = errorLogService;
 
         _startGatewayCommand = new AsyncCommand(StartGatewayAsync, () => !IsGatewayRunning);
         _stopGatewayCommand = new AsyncCommand(StopGatewayAsync, () => IsGatewayRunning);
@@ -91,6 +102,7 @@ public sealed class MainWindowViewModel : ObservableObject
         InstallImageGenAutoCommand = new AsyncCommand(InstallImageGenAutoAsync);
         EnsureNodeCommand = new AsyncCommand(EnsureNodeAsync);
         EnableChineseLocalizationCommand = new AsyncCommand(EnableChineseLocalizationAsync);
+        RegisterAililiCommand = new AsyncCommand(RegisterAililiAsync);
         ToggleApiKeyCommand = new AsyncCommand(() =>
         {
             IsApiKeyVisible = !IsApiKeyVisible;
@@ -132,6 +144,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand InstallImageGenAutoCommand { get; }
     public AsyncCommand EnsureNodeCommand { get; }
     public AsyncCommand EnableChineseLocalizationCommand { get; }
+    public AsyncCommand RegisterAililiCommand { get; }
     public AsyncCommand ToggleApiKeyCommand { get; }
     public AsyncCommand ClearLogsCommand { get; }
 
@@ -221,6 +234,12 @@ public sealed class MainWindowViewModel : ObservableObject
     public string CodexStatus { get => _codexStatus; private set => SetProperty(ref _codexStatus, value); }
     public string ApplicationStatus { get => _applicationStatus; private set => SetProperty(ref _applicationStatus, value); }
     public bool IsApiKeyVisible { get => _isApiKeyVisible; set => SetProperty(ref _isApiKeyVisible, value); }
+    public string AililiUsername { get => _aililiUsername; private set => SetProperty(ref _aililiUsername, value); }
+    public string AililiPassword { get => _aililiPassword; private set => SetProperty(ref _aililiPassword, value); }
+    public string AililiCodexKey { get => _aililiCodexKey; private set => SetProperty(ref _aililiCodexKey, value); }
+    public string AililiImageKey { get => _aililiImageKey; private set => SetProperty(ref _aililiImageKey, value); }
+    public string AililiStatus { get => _aililiStatus; private set => SetProperty(ref _aililiStatus, value); }
+    public string AililiCredentialsPath => _paths.AililiCredentialsPath;
     public string CodexDirectory => _paths.CodexDirectory;
 
     private void Load()
@@ -232,14 +251,49 @@ public sealed class MainWindowViewModel : ObservableObject
             ApiKey = _environmentService.Read(EnvironmentKey);
             ImageApiKey = _environmentService.Read("OPENAI_API_KEY");
             ImageModel = _environmentService.Read("OPENAI_IMAGE_MODEL");
+            ApplyAililiAccount(_aililiAccountService.Load());
             RefreshBackups();
             RefreshApplicationStatus();
             GatewayStatus = $"配置文件：{_gatewaySettingsService.SettingsPath}";
         }
         catch (Exception exception)
         {
+            LogError("加载配置", exception);
             CodexStatus = exception.Message;
         }
+    }
+
+    private async Task RegisterAililiAsync()
+    {
+        try
+        {
+            AililiStatus = "正在注册账号并创建两个分组 Key…";
+            var account = await _aililiAccountService.RegisterAsync();
+            ApplyAililiAccount(account);
+            ApiKey = account.CodexKey;
+            ImageApiKey = account.ImageKey;
+            CodexBaseUrl = "https://api.ailili.chat/v1";
+            AililiStatus = "账号和两个 Key 已创建，并已填入连接配置。";
+        }
+        catch (Exception exception)
+        {
+            LogError("自动注册 Ailili 账号", exception);
+            AililiStatus = $"自动注册失败：{exception.Message}";
+        }
+    }
+
+    private void ApplyAililiAccount(AililiAccount? account)
+    {
+        if (account is null)
+        {
+            return;
+        }
+
+        AililiUsername = account.Username;
+        AililiPassword = account.Password;
+        AililiCodexKey = account.CodexKey;
+        AililiImageKey = account.ImageKey;
+        AililiStatus = "已加载保存的 Ailili 账号。";
     }
 
     private async Task SaveConfigurationAsync()
@@ -303,6 +357,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            LogError("保存配置", exception);
             GatewayStatus = $"保存失败：{exception.Message}";
             CodexStatus = GatewayStatus;
         }
@@ -320,6 +375,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            LogError("启动网关", exception);
             GatewayStatus = $"启动失败：{exception.Message}";
         }
     }
@@ -334,6 +390,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            LogError("停止网关", exception);
             GatewayStatus = $"停止失败：{exception.Message}";
         }
     }
@@ -355,6 +412,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            LogError("获取 Codex 模型", exception);
             CodexStatus = $"获取模型失败：{exception.Message}";
         }
     }
@@ -380,6 +438,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            LogError("获取生图模型", exception);
             ImageGenerationStatus = $"获取生图模型失败：{exception.Message}";
         }
     }
@@ -393,6 +452,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            LogError("刷新备份", exception);
             CodexStatus = $"刷新失败：{exception.Message}";
         }
         return Task.CompletedTask;
@@ -423,6 +483,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            LogError("还原备份", exception);
             CodexStatus = $"还原失败：{exception.Message}";
         }
     }
@@ -436,6 +497,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            LogError("启动 ChatGPT", exception);
             CodexStatus = $"启动失败：{exception.Message}";
         }
         return Task.CompletedTask;
@@ -449,6 +511,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            LogError("打开 Codex 目录", exception);
             CodexStatus = $"打开目录失败：{exception.Message}";
         }
         return Task.CompletedTask;
@@ -465,6 +528,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            LogError("安装电商生图 Skill", exception);
             CodexStatus = $"安装电商生图 Skill 失败：{exception.Message}";
         }
     }
@@ -480,6 +544,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            LogError("安装兼容版生图 Skill", exception);
             CodexStatus = $"安装兼容版生图 Skill 失败：{exception.Message}";
         }
     }
@@ -493,6 +558,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            LogError("处理 Node.js", exception);
             CodexStatus = $"Node.js 处理失败：{exception.Message}";
         }
     }
@@ -509,6 +575,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
+            LogError("启用 Codex 界面汉化", exception);
             CodexStatus = $"启用界面汉化失败：{exception.Message}";
         }
     }
@@ -517,6 +584,8 @@ public sealed class MainWindowViewModel : ObservableObject
         Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
         (string.Equals(uri.Host, "127.0.0.1", StringComparison.Ordinal) ||
          string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase));
+
+    private void LogError(string operation, Exception exception) => _errorLogService.Write(operation, exception);
 
     private void ApplyEndpointIdentity(string endpoint)
     {

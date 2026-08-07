@@ -31,6 +31,42 @@
           </StackPanel>
 
           <Border Classes="card">
+            <StackPanel Spacing="14">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="section-title" Text="Ailili 账号" />
+                  <TextBlock Classes="caption" Text="自动注册账号，并分别创建 Codex 与生图分组 Key。" />
+                </StackPanel>
+                <Button Grid.Column="1" Classes="primary" Command="{Binding RegisterAililiCommand}" Content="自动注册并生成 Key" />
+              </Grid>
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="caption" Text="用户名" />
+                  <TextBox Text="{Binding AililiUsername}" IsReadOnly="True" PlaceholderText="注册后显示" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="6">
+                  <TextBlock Classes="caption" Text="密码" />
+                  <TextBox Text="{Binding AililiPassword}" IsReadOnly="True" PlaceholderText="注册后显示" />
+                </StackPanel>
+              </Grid>
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="caption" Text="Codex 分组 Key" />
+                  <TextBox Text="{Binding AililiCodexKey}" IsReadOnly="True" TextWrapping="NoWrap" PlaceholderText="注册后显示" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="6">
+                  <TextBlock Classes="caption" Text="生图分组 Key" />
+                  <TextBox Text="{Binding AililiImageKey}" IsReadOnly="True" TextWrapping="NoWrap" PlaceholderText="注册后显示" />
+                </StackPanel>
+              </Grid>
+              <StackPanel Spacing="3">
+                <TextBlock FontSize="12" Text="{Binding AililiStatus}" TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="{Binding AililiCredentialsPath, StringFormat='凭据文件：{0}'}" TextWrapping="Wrap" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="card">
             <StackPanel Spacing="20">
               <StackPanel Spacing="4">
                 <TextBlock Classes="section-title" Text="Codex" />
@@ -79,7 +115,16 @@
           </Border>
 
           <Border Classes="feedback-panel">
-            <TextBlock Text="{Binding CodexStatus}" FontSize="12" TextWrapping="Wrap" />
+            <TextBox Text="{Binding CodexStatus}"
+                     FontSize="12"
+                     IsReadOnly="True"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     MinHeight="52"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     Padding="0"
+                     IsHitTestVisible="True" />
           </Border>
 
           <Grid ColumnDefinitions="*,*" ColumnSpacing="16">

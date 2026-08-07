@@ -96,20 +96,34 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
-        startInfo.ArgumentList.Add("install");
-        startInfo.ArgumentList.Add("--omit=dev");
         startInfo.Environment["PATH"] = $"{Path.GetDirectoryName(nodePath)}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}";
-        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("无法启动托管 npm。");
-        var outputTask = process.StandardOutput.ReadToEndAsync();
-        var errorTask = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        var output = (await outputTask).Trim();
-        var error = (await errorTask).Trim();
-        if (process.ExitCode != 0)
+        var failures = new List<string>();
+        foreach (var registry in new[] { "https://registry.npmmirror.com", "https://registry.npmjs.org" })
         {
-            throw new InvalidOperationException($"共享 Node 库安装失败：{(string.IsNullOrWhiteSpace(error) ? output : error)}");
+            startInfo.ArgumentList.Clear();
+            startInfo.ArgumentList.Add("install");
+            startInfo.ArgumentList.Add("--omit=dev");
+            startInfo.ArgumentList.Add("--registry");
+            startInfo.ArgumentList.Add(registry);
+            using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("无法启动托管 npm。");
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            var output = (await outputTask).Trim();
+            var error = (await errorTask).Trim();
+            if (process.ExitCode == 0)
+            {
+                return;
+            }
+
+            var detail = string.IsNullOrWhiteSpace(error) ? output : error;
+            failures.Add($"{registry}: {TrimError(detail)}");
         }
+
+        throw new InvalidOperationException($"共享 Node 库安装失败。已尝试 npm 镜像：{string.Join("；", failures)}");
     }
+
+    private static string TrimError(string value) => value.Length <= 500 ? value : value[^500..];
 
     private async Task WriteManifestAsync(PlatformPackage platform, string version)
     {
