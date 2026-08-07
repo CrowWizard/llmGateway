@@ -41,6 +41,7 @@
                   <Button Classes="primary" Command="{Binding RegisterAililiCommand}" Content="注册账号" />
                   <Button Classes="secondary" Command="{Binding LoginAililiCommand}" Content="登录" />
                   <Button Classes="secondary" Command="{Binding CreateAililiTokensCommand}" Content="创建两个 Key" />
+                  <Button Classes="ghost" Command="{Binding OpenAililiWebsiteCommand}" Content="打开网站" />
                 </StackPanel>
               </Grid>
               <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
@@ -172,9 +173,13 @@
               </StackPanel>
               <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
                 <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding EnsureNodeCommand}" Content="安装 Node 运行时" />
-                <Button Grid.Column="1" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallEcommerceImageStudioCommand}" Content="安装电商生图 Skill" />
-                <Button Grid.Column="2" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallImageGenAutoCommand}" Content="安装兼容版生图 Skill" />
+                <Button Grid.Column="1" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallEcommerceImageStudioCommand}" IsEnabled="{Binding !IsNodeInstalling}" Content="安装电商生图 Skill" />
+                <Button Grid.Column="2" HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding InstallImageGenAutoCommand}" IsEnabled="{Binding !IsNodeInstalling}" Content="安装兼容版生图 Skill" />
               </Grid>
+              <StackPanel Spacing="4" IsVisible="{Binding IsNodeInstalling}">
+                <ProgressBar Minimum="0" Maximum="100" Value="{Binding NodeInstallProgress}" Height="8" />
+                <TextBlock Classes="caption" Text="{Binding NodeInstallStatus}" TextWrapping="Wrap" />
+              </StackPanel>
               <Button HorizontalAlignment="Stretch" Classes="secondary" Command="{Binding EnableChineseLocalizationCommand}" Content="启用 Codex 界面汉化" />
             </StackPanel>
           </Border>

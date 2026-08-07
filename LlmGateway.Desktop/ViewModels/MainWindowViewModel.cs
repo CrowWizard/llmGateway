@@ -45,6 +45,9 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _gatewayStatus = "已停止";
     private string _codexStatus = "就绪";
     private string _applicationStatus = string.Empty;
+    private bool _isNodeInstalling;
+    private double _nodeInstallProgress;
+    private string _nodeInstallStatus = string.Empty;
     private bool _isApiKeyVisible;
     private bool _isAililiPasswordVisible;
     private string _aililiUsername = string.Empty;
@@ -99,8 +102,9 @@ public sealed class MainWindowViewModel : ObservableObject
         RefreshBackupsCommand = new AsyncCommand(RefreshBackupsAsync);
         LaunchChatGptCommand = new AsyncCommand(LaunchChatGptAsync);
         OpenCodexDirectoryCommand = new AsyncCommand(OpenCodexDirectoryAsync);
-        InstallEcommerceImageStudioCommand = new AsyncCommand(InstallEcommerceImageStudioAsync);
-        InstallImageGenAutoCommand = new AsyncCommand(InstallImageGenAutoAsync);
+        OpenAililiWebsiteCommand = new AsyncCommand(OpenAililiWebsiteAsync);
+        InstallEcommerceImageStudioCommand = new AsyncCommand(InstallEcommerceImageStudioAsync, () => !IsNodeInstalling);
+        InstallImageGenAutoCommand = new AsyncCommand(InstallImageGenAutoAsync, () => !IsNodeInstalling);
         EnsureNodeCommand = new AsyncCommand(EnsureNodeAsync);
         EnableChineseLocalizationCommand = new AsyncCommand(EnableChineseLocalizationAsync);
         RegisterAililiCommand = new AsyncCommand(RegisterAililiAccountAsync);
@@ -148,6 +152,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand RefreshBackupsCommand { get; }
     public AsyncCommand LaunchChatGptCommand { get; }
     public AsyncCommand OpenCodexDirectoryCommand { get; }
+    public AsyncCommand OpenAililiWebsiteCommand { get; }
     public AsyncCommand InstallEcommerceImageStudioCommand { get; }
     public AsyncCommand InstallImageGenAutoCommand { get; }
     public AsyncCommand EnsureNodeCommand { get; }
@@ -244,6 +249,20 @@ public sealed class MainWindowViewModel : ObservableObject
     public string GatewayStatus { get => _gatewayStatus; private set => SetProperty(ref _gatewayStatus, value); }
     public string CodexStatus { get => _codexStatus; private set => SetProperty(ref _codexStatus, value); }
     public string ApplicationStatus { get => _applicationStatus; private set => SetProperty(ref _applicationStatus, value); }
+    public bool IsNodeInstalling
+    {
+        get => _isNodeInstalling;
+        private set
+        {
+            if (SetProperty(ref _isNodeInstalling, value))
+            {
+                InstallEcommerceImageStudioCommand.RaiseCanExecuteChanged();
+                InstallImageGenAutoCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+    public double NodeInstallProgress { get => _nodeInstallProgress; private set => SetProperty(ref _nodeInstallProgress, value); }
+    public string NodeInstallStatus { get => _nodeInstallStatus; private set => SetProperty(ref _nodeInstallStatus, value); }
     public bool IsApiKeyVisible { get => _isApiKeyVisible; set => SetProperty(ref _isApiKeyVisible, value); }
     public bool IsAililiPasswordVisible { get => _isAililiPasswordVisible; set => SetProperty(ref _isAililiPasswordVisible, value); }
     public string AililiUsername { get => _aililiUsername; set => SetProperty(ref _aililiUsername, value); }
@@ -562,6 +581,20 @@ public sealed class MainWindowViewModel : ObservableObject
         return Task.CompletedTask;
     }
 
+    private Task OpenAililiWebsiteAsync()
+    {
+        try
+        {
+            _launcher.OpenUrl("https://api.ailili.chat");
+        }
+        catch (Exception exception)
+        {
+            LogError("打开 Ailili 网站", exception);
+            AililiStatus = $"打开网站失败：{exception.Message}";
+        }
+        return Task.CompletedTask;
+    }
+
     private async Task InstallEcommerceImageStudioAsync()
     {
         try
@@ -598,13 +631,26 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         try
         {
+            IsNodeInstalling = true;
+            NodeInstallProgress = 0;
+            NodeInstallStatus = "正在检测 Node.js 环境…";
             CodexStatus = "正在检测 Node.js 环境…";
-            CodexStatus = await _nodeRuntimeService.EnsureNodeAsync();
+            var progress = new Progress<NodeInstallProgress>(update =>
+            {
+                NodeInstallProgress = update.Value;
+                NodeInstallStatus = update.Status;
+            });
+            CodexStatus = await _nodeRuntimeService.EnsureNodeAsync(progress);
         }
         catch (Exception exception)
         {
             LogError("处理 Node.js", exception);
             CodexStatus = $"Node.js 处理失败：{exception.Message}";
+            NodeInstallStatus = CodexStatus;
+        }
+        finally
+        {
+            IsNodeInstalling = false;
         }
     }
 

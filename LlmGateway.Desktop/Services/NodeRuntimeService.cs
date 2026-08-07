@@ -5,14 +5,17 @@ using System.Text.Json;
 
 namespace LlmGateway.Desktop.Services;
 
+public sealed record NodeInstallProgress(double Value, string Status);
+
 public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = null, ErrorLogService? errorLogService = null)
 {
     private const string NodeVersion = "22.22.3";
     private readonly HttpClient _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
     private readonly ErrorLogService _errorLogService = errorLogService ?? new ErrorLogService(paths);
 
-    public async Task<string> EnsureNodeAsync()
+    public async Task<string> EnsureNodeAsync(IProgress<NodeInstallProgress>? progress = null)
     {
+        Report(progress, 5, "正在检测托管 Node.js…");
         var managedNode = GetManagedNodePath();
         var managedVersion = await TryGetVersionAsync(managedNode);
         if (managedVersion is not null)
@@ -20,6 +23,7 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
             var restoredSkill = false;
             if (!HasRuntimeSkill())
             {
+                Report(progress, 30, "正在补齐 Node Skill 文件…");
                 await RestoreRuntimeSkillFilesAsync();
                 restoredSkill = true;
             }
@@ -27,9 +31,11 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
             var installedPackages = HasSharedPackages();
             if (!installedPackages)
             {
+                Report(progress, 70, "正在安装 Node 共享依赖…");
                 await InstallSharedPackagesAsync(managedNode, Path.GetDirectoryName(managedNode)!);
             }
 
+            Report(progress, 100, "托管 Node.js 已就绪。");
             return restoredSkill || !installedPackages
                 ? $"托管 Node.js 已就绪，已补齐{(restoredSkill ? " Skill 文件" : string.Empty)}{(restoredSkill && !installedPackages ? "和" : string.Empty)}{(!installedPackages ? "共享依赖" : string.Empty)}：{managedNode} {managedVersion}"
                 : $"托管 Node.js 已就绪，无需重复安装：{managedNode} {managedVersion}";
@@ -45,16 +51,19 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
         var extractDirectory = Path.Combine(paths.CodexTemporaryDirectory, $"node-{Guid.NewGuid():N}");
         try
         {
+            Report(progress, 15, "正在准备 Node 安装文件…");
             WriteLog($"开始安装 Node.js {NodeVersion}。内置 Skill：{paths.NodeRuntimeSourceDirectory}；目标目录：{paths.NodeRuntimeSkillDirectory}；临时目录：{paths.CodexTemporaryDirectory}");
             Directory.CreateDirectory(paths.CodexTemporaryDirectory);
             WriteLog("已创建临时目录，开始复制内置 noderuntime Skill。");
             await InstallRuntimeSkillAsync();
             WriteLog($"内置 Skill 已就绪，开始下载归档：{archivePath}");
+            Report(progress, 30, "正在下载 Node.js 运行时…");
             await DownloadArchiveAsync(platform, archivePath);
 
             TryDeleteDirectory(extractDirectory);
             WriteLog($"已删除旧解压目录，开始解压到：{extractDirectory}");
-            ZipFile.ExtractToDirectory(archivePath, extractDirectory);
+            Report(progress, 55, "正在解压 Node.js 运行时…");
+            await Task.Run(() => ZipFile.ExtractToDirectory(archivePath, extractDirectory));
             var extractedRoot = Directory.EnumerateDirectories(extractDirectory).Single();
             var targetDirectory = Path.GetDirectoryName(managedNode)!;
             var targetParentDirectory = Path.GetDirectoryName(targetDirectory)!;
@@ -62,15 +71,18 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
             CodexContentInstaller.MoveToTemporary(targetDirectory, paths.CodexTemporaryDirectory);
             Directory.CreateDirectory(targetParentDirectory);
             WriteLog($"已创建目标父目录：{targetParentDirectory}；准备移动。源目录存在：{Directory.Exists(extractedRoot)}；目标父目录存在：{Directory.Exists(targetParentDirectory)}。");
-            Directory.Move(extractedRoot, targetDirectory);
+            Report(progress, 65, "正在配置 Node.js 运行时…");
+            await Task.Run(() => Directory.Move(extractedRoot, targetDirectory));
             WriteLog($"运行时目录移动完成。目标目录存在：{Directory.Exists(targetDirectory)}；node.exe 存在：{File.Exists(managedNode)}。");
 
             var installedVersion = await TryGetVersionAsync(managedNode)
                 ?? throw new InvalidOperationException("托管 Node.js 解压完成，但运行验证失败。");
             WriteLog($"Node.js {installedVersion} 验证成功，开始安装共享依赖。");
+            Report(progress, 75, "正在安装 Node 共享依赖…");
             await InstallSharedPackagesAsync(managedNode, targetDirectory);
             await WriteManifestAsync(platform, installedVersion);
             WriteLog("托管 Node.js 和共享依赖安装完成。");
+            Report(progress, 100, "托管 Node.js 安装完成。");
             return $"托管 Node.js 安装完成：{managedNode} {installedVersion}";
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidDataException or InvalidOperationException)
@@ -200,6 +212,9 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
     }
 
     private static string TrimError(string value) => value.Length <= 500 ? value : value[^500..];
+
+    private static void Report(IProgress<NodeInstallProgress>? progress, double value, string status) =>
+        progress?.Report(new NodeInstallProgress(value, status));
 
     private void WriteLog(string message) => _errorLogService.WriteInformation("处理 Node.js", message);
 

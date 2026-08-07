@@ -37,6 +37,21 @@ public sealed class ApplicationLauncher
         Launch(DetectChatGpt(), workingDirectory);
     }
 
+    public void OpenUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new ArgumentException("请输入有效的网页地址。", nameof(url));
+        }
+
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = uri.AbsoluteUri,
+            UseShellExecute = true
+        });
+    }
+
     public async Task CloseManagedClientsAsync(CancellationToken cancellationToken = default)
     {
         var processes = new[] { "ChatGPT", "chatgpt", "codex" }
