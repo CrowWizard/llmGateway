@@ -12,7 +12,12 @@ public sealed class ErrorLogService
 
     public string LogPath => _logPath;
 
+    public void WriteInformation(string operation, string message) => WriteEntry(operation, message);
+
     public void Write(string operation, Exception exception)
+        => WriteEntry(operation, exception.ToString());
+
+    private void WriteEntry(string operation, string detail)
     {
         try
         {
@@ -22,7 +27,7 @@ public sealed class ErrorLogService
                 Directory.CreateDirectory(directory);
             }
 
-            var entry = $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}] {operation}\n{exception}\n{new string('-', 80)}\n";
+            var entry = $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}] {operation}\n{detail}\n{new string('-', 80)}\n";
             lock (_sync)
             {
                 File.AppendAllText(_logPath, entry);

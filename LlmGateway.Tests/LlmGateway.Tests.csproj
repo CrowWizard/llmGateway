@@ -24,6 +24,7 @@
     <Compile Include="../LlmGateway.Desktop/Services/CodexContentInstaller.cs" Link="Services/CodexContentInstaller.cs" />
     <Compile Include="../LlmGateway.Desktop/Services/CodexSkillService.cs" Link="Services/CodexSkillService.cs" />
     <Compile Include="../LlmGateway.Desktop/Services/EcommerceImageStudioSkillService.cs" Link="Services/EcommerceImageStudioSkillService.cs" />
+    <Compile Include="../LlmGateway.Desktop/Services/ErrorLogService.cs" Link="Services/ErrorLogService.cs" />
     <Compile Include="../LlmGateway.Desktop/Services/NodeRuntimeService.cs" Link="Services/NodeRuntimeService.cs" />
   </ItemGroup>
 

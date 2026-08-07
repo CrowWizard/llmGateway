@@ -5,10 +5,11 @@ using System.Text.Json;
 
 namespace LlmGateway.Desktop.Services;
 
-public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = null)
+public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = null, ErrorLogService? errorLogService = null)
 {
     private const string NodeVersion = "22.22.3";
     private readonly HttpClient _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+    private readonly ErrorLogService _errorLogService = errorLogService ?? new ErrorLogService(paths);
 
     public async Task<string> EnsureNodeAsync()
     {
@@ -29,28 +30,36 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
             return await SystemFallbackAsync("当前平台暂无托管 Node.js 包");
         }
 
-        await InstallRuntimeSkillAsync();
         var archivePath = Path.Combine(paths.CodexTemporaryDirectory, platform.ArchiveName);
         var extractDirectory = Path.Combine(paths.CodexTemporaryDirectory, $"node-{Guid.NewGuid():N}");
         try
         {
+            WriteLog($"开始安装 Node.js {NodeVersion}。内置 Skill：{paths.NodeRuntimeSourceDirectory}；目标目录：{paths.NodeRuntimeSkillDirectory}；临时目录：{paths.CodexTemporaryDirectory}");
             Directory.CreateDirectory(paths.CodexTemporaryDirectory);
+            WriteLog("已创建临时目录，开始复制内置 noderuntime Skill。");
+            await InstallRuntimeSkillAsync();
+            WriteLog($"内置 Skill 已就绪，开始下载归档：{archivePath}");
             await DownloadArchiveAsync(platform, archivePath);
 
+            WriteLog($"归档下载完成，开始解压到：{extractDirectory}");
             ZipFile.ExtractToDirectory(archivePath, extractDirectory);
             var extractedRoot = Directory.EnumerateDirectories(extractDirectory).Single();
             var targetDirectory = Path.GetDirectoryName(managedNode)!;
+            WriteLog($"解压完成，移动运行时目录：{extractedRoot} -> {targetDirectory}");
             CodexContentInstaller.MoveToTemporary(targetDirectory, paths.CodexTemporaryDirectory);
             Directory.Move(extractedRoot, targetDirectory);
 
             var installedVersion = await TryGetVersionAsync(managedNode)
                 ?? throw new InvalidOperationException("托管 Node.js 解压完成，但运行验证失败。");
+            WriteLog($"Node.js {installedVersion} 验证成功，开始安装共享依赖。");
             await InstallSharedPackagesAsync(managedNode, targetDirectory);
             await WriteManifestAsync(platform, installedVersion);
+            WriteLog("托管 Node.js 和共享依赖安装完成。");
             return $"托管 Node.js 安装完成：{managedNode} {installedVersion}";
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidDataException or InvalidOperationException)
         {
+            WriteLog($"安装失败：{exception}");
             return await SystemFallbackAsync($"托管 Node.js 安装失败：{exception.Message}");
         }
         finally
@@ -82,6 +91,7 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
         {
             try
             {
+                WriteLog($"尝试下载 Node.js：{url}");
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
                 request.Headers.UserAgent.ParseAdd("LlmGateway/1.0");
                 using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
@@ -89,11 +99,13 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
                 await using var responseStream = await response.Content.ReadAsStreamAsync();
                 await using var archiveStream = File.Create(archivePath);
                 await responseStream.CopyToAsync(archiveStream);
+                WriteLog($"下载成功：{url}");
                 return;
             }
             catch (Exception exception) when (exception is HttpRequestException or IOException)
             {
                 TryDeleteFile(archivePath);
+                WriteLog($"下载失败：{url}；{exception.Message}");
                 failures.Add($"{url}：{exception.Message}");
             }
         }
@@ -122,6 +134,7 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
         var failures = new List<string>();
         foreach (var registry in new[] { "https://registry.npmmirror.com", "https://registry.npmjs.org" })
         {
+            WriteLog($"尝试通过 npm registry 安装共享依赖：{registry}");
             startInfo.ArgumentList.Clear();
             startInfo.ArgumentList.Add("install");
             startInfo.ArgumentList.Add("--omit=dev");
@@ -135,10 +148,12 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
             var error = (await errorTask).Trim();
             if (process.ExitCode == 0)
             {
+                WriteLog($"共享依赖安装成功：{registry}");
                 return;
             }
 
             var detail = string.IsNullOrWhiteSpace(error) ? output : error;
+            WriteLog($"共享依赖安装失败：{registry}；{TrimError(detail)}");
             failures.Add($"{registry}: {TrimError(detail)}");
         }
 
@@ -146,6 +161,8 @@ public sealed class NodeRuntimeService(AppPaths paths, HttpClient? httpClient = 
     }
 
     private static string TrimError(string value) => value.Length <= 500 ? value : value[^500..];
+
+    private void WriteLog(string message) => _errorLogService.WriteInformation("处理 Node.js", message);
 
     private async Task WriteManifestAsync(PlatformPackage platform, string version)
     {

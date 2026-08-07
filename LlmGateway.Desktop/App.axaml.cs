@@ -18,6 +18,7 @@ public sealed partial class App : Application
             var paths = new AppPaths();
             var gatewayHost = new GatewayHostService();
             var aililiAccountService = new AililiAccountService(paths);
+            var errorLogService = new ErrorLogService(paths);
             var viewModel = new MainWindowViewModel(
                 paths,
                 new GatewaySettingsService(paths),
@@ -32,9 +33,9 @@ public sealed partial class App : Application
                 new ModelService(),
                 new ApplicationLauncher(),
                 new CodexLocalizationService(),
-                new NodeRuntimeService(paths),
+                new NodeRuntimeService(paths, errorLogService: errorLogService),
                 aililiAccountService,
-                new ErrorLogService(paths));
+                errorLogService);
 
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
             desktop.ShutdownRequested += async (_, _) => await gatewayHost.StopAsync();
