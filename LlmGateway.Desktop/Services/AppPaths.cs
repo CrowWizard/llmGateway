@@ -23,7 +23,6 @@ public sealed class AppPaths
     public string StateBackupDirectory => Path.Combine(BackupDirectory, "state");
     public string CodexTemporaryDirectory => Path.Combine(CodexDirectory, "temp");
     public string CodexSkillsDirectory => Path.Combine(CodexDirectory, "skills");
-    public string AililiCredentialsPath => Path.Combine(CodexDirectory, "ailili-account.json");
     public string NodeRuntimeSkillDirectory => Path.Combine(CodexSkillsDirectory, "noderuntime");
     public string NodeRuntimeDirectory => Path.Combine(NodeRuntimeSkillDirectory, "runtime");
     public string ImagePromptGuideDirectory => Path.Combine(ApplicationDirectory, "image-prompt-guide");

@@ -17,7 +17,6 @@ public sealed partial class App : Application
         {
             var paths = new AppPaths();
             var gatewayHost = new GatewayHostService();
-            var aililiAccountService = new AililiAccountService(paths);
             var errorLogService = new ErrorLogService(paths);
             var viewModel = new MainWindowViewModel(
                 paths,
@@ -34,7 +33,6 @@ public sealed partial class App : Application
                 new ApplicationLauncher(),
                 new CodexLocalizationService(),
                 new NodeRuntimeService(paths, errorLogService: errorLogService),
-                aililiAccountService,
                 errorLogService);
 
             desktop.MainWindow = new MainWindow { DataContext = viewModel };

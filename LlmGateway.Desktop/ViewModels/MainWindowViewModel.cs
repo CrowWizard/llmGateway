@@ -22,7 +22,6 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly ApplicationLauncher _launcher;
     private readonly CodexLocalizationService _localizationService;
     private readonly NodeRuntimeService _nodeRuntimeService;
-    private readonly AililiAccountService _aililiAccountService;
     private readonly ErrorLogService _errorLogService;
     private readonly AsyncCommand _startGatewayCommand;
     private readonly AsyncCommand _stopGatewayCommand;
@@ -49,12 +48,6 @@ public sealed class MainWindowViewModel : ObservableObject
     private double _nodeInstallProgress;
     private string _nodeInstallStatus = string.Empty;
     private bool _isApiKeyVisible;
-    private bool _isAililiPasswordVisible;
-    private string _aililiUsername = string.Empty;
-    private string _aililiPassword = string.Empty;
-    private string _aililiCodexKey = string.Empty;
-    private string _aililiImageKey = string.Empty;
-    private string _aililiStatus = "尚未创建账号";
 
     public MainWindowViewModel(
         AppPaths paths,
@@ -71,7 +64,6 @@ public sealed class MainWindowViewModel : ObservableObject
         ApplicationLauncher launcher,
         CodexLocalizationService localizationService,
         NodeRuntimeService nodeRuntimeService,
-        AililiAccountService aililiAccountService,
         ErrorLogService errorLogService)
     {
         _paths = paths;
@@ -88,7 +80,6 @@ public sealed class MainWindowViewModel : ObservableObject
         _launcher = launcher;
         _localizationService = localizationService;
         _nodeRuntimeService = nodeRuntimeService;
-        _aililiAccountService = aililiAccountService;
         _errorLogService = errorLogService;
 
         _startGatewayCommand = new AsyncCommand(StartGatewayAsync, () => !IsGatewayRunning);
@@ -107,17 +98,9 @@ public sealed class MainWindowViewModel : ObservableObject
         InstallImageGenAutoCommand = new AsyncCommand(InstallImageGenAutoAsync, () => !IsNodeInstalling);
         EnsureNodeCommand = new AsyncCommand(EnsureNodeAsync);
         EnableChineseLocalizationCommand = new AsyncCommand(EnableChineseLocalizationAsync);
-        RegisterAililiCommand = new AsyncCommand(RegisterAililiAccountAsync);
-        LoginAililiCommand = new AsyncCommand(LoginAililiAccountAsync);
-        CreateAililiTokensCommand = new AsyncCommand(CreateAililiTokensAsync);
         ToggleApiKeyCommand = new AsyncCommand(() =>
         {
             IsApiKeyVisible = !IsApiKeyVisible;
-            return Task.CompletedTask;
-        });
-        ToggleAililiPasswordCommand = new AsyncCommand(() =>
-        {
-            IsAililiPasswordVisible = !IsAililiPasswordVisible;
             return Task.CompletedTask;
         });
         ClearLogsCommand = new AsyncCommand(() =>
@@ -157,11 +140,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand InstallImageGenAutoCommand { get; }
     public AsyncCommand EnsureNodeCommand { get; }
     public AsyncCommand EnableChineseLocalizationCommand { get; }
-    public AsyncCommand RegisterAililiCommand { get; }
-    public AsyncCommand LoginAililiCommand { get; }
-    public AsyncCommand CreateAililiTokensCommand { get; }
     public AsyncCommand ToggleApiKeyCommand { get; }
-    public AsyncCommand ToggleAililiPasswordCommand { get; }
     public AsyncCommand ClearLogsCommand { get; }
 
     public string LocalBindIp { get => _localBindIp; set => SetProperty(ref _localBindIp, value); }
@@ -264,13 +243,6 @@ public sealed class MainWindowViewModel : ObservableObject
     public double NodeInstallProgress { get => _nodeInstallProgress; private set => SetProperty(ref _nodeInstallProgress, value); }
     public string NodeInstallStatus { get => _nodeInstallStatus; private set => SetProperty(ref _nodeInstallStatus, value); }
     public bool IsApiKeyVisible { get => _isApiKeyVisible; set => SetProperty(ref _isApiKeyVisible, value); }
-    public bool IsAililiPasswordVisible { get => _isAililiPasswordVisible; set => SetProperty(ref _isAililiPasswordVisible, value); }
-    public string AililiUsername { get => _aililiUsername; set => SetProperty(ref _aililiUsername, value); }
-    public string AililiPassword { get => _aililiPassword; set => SetProperty(ref _aililiPassword, value); }
-    public string AililiCodexKey { get => _aililiCodexKey; private set => SetProperty(ref _aililiCodexKey, value); }
-    public string AililiImageKey { get => _aililiImageKey; private set => SetProperty(ref _aililiImageKey, value); }
-    public string AililiStatus { get => _aililiStatus; private set => SetProperty(ref _aililiStatus, value); }
-    public string AililiCredentialsPath => _paths.AililiCredentialsPath;
     public string ErrorLogPath => _errorLogService.LogDirectory;
     public string CodexDirectory => _paths.CodexDirectory;
 
@@ -283,7 +255,6 @@ public sealed class MainWindowViewModel : ObservableObject
             ApiKey = _environmentService.Read(EnvironmentKey);
             ImageApiKey = _environmentService.Read("OPENAI_API_KEY");
             ImageModel = _environmentService.Read("OPENAI_IMAGE_MODEL");
-            ApplyAililiAccount(_aililiAccountService.Load());
             RefreshBackups();
             RefreshApplicationStatus();
             GatewayStatus = $"配置文件：{_gatewaySettingsService.SettingsPath}";
@@ -295,70 +266,6 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    private async Task RegisterAililiAccountAsync()
-    {
-        try
-        {
-            AililiStatus = "正在注册 Ailili 账号…";
-            var account = await _aililiAccountService.RegisterAccountAsync(username: AililiUsername, password: AililiPassword);
-            ApplyAililiAccount(account);
-            AililiStatus = "Ailili 账号注册并登录成功，请继续创建两个分组 Key。";
-        }
-        catch (Exception exception)
-        {
-            LogError("注册 Ailili 账号", exception);
-            AililiStatus = $"自动注册失败：{exception.Message}";
-        }
-    }
-
-    private async Task LoginAililiAccountAsync()
-    {
-        try
-        {
-            AililiStatus = "正在登录 Ailili 账号…";
-            var account = await _aililiAccountService.LoginAsync(AililiUsername, AililiPassword);
-            ApplyAililiAccount(account);
-            AililiStatus = "Ailili 登录成功，现在可以创建两个分组 Key。";
-        }
-        catch (Exception exception)
-        {
-            LogError("登录 Ailili 账号", exception);
-            AililiStatus = $"登录失败：{exception.Message}";
-        }
-    }
-
-    private async Task CreateAililiTokensAsync()
-    {
-        try
-        {
-            AililiStatus = "正在登录并创建两个分组 Key…";
-            var account = await _aililiAccountService.CreateTokensAsync();
-            ApplyAililiAccount(account);
-            ApiKey = account.CodexKey;
-            ImageApiKey = account.ImageKey;
-            CodexBaseUrl = "https://api.ailili.chat/v1";
-            AililiStatus = "两个分组 Key 已创建，并已填入连接配置。";
-        }
-        catch (Exception exception)
-        {
-            LogError("创建 Ailili 分组 Key", exception);
-            AililiStatus = $"创建令牌失败：{exception.Message}";
-        }
-    }
-
-    private void ApplyAililiAccount(AililiAccount? account)
-    {
-        if (account is null)
-        {
-            return;
-        }
-
-        AililiUsername = account.Username;
-        AililiPassword = account.Password;
-        AililiCodexKey = account.CodexKey;
-        AililiImageKey = account.ImageKey;
-        AililiStatus = "已加载保存的 Ailili 账号。";
-    }
 
     private async Task SaveConfigurationAsync()
     {
@@ -590,7 +497,7 @@ public sealed class MainWindowViewModel : ObservableObject
         catch (Exception exception)
         {
             LogError("打开 Ailili 网站", exception);
-            AililiStatus = $"打开网站失败：{exception.Message}";
+            CodexStatus = $"打开 Ailili 网站失败：{exception.Message}";
         }
         return Task.CompletedTask;
     }
