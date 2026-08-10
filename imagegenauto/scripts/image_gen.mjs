@@ -24,7 +24,7 @@ function die(message) { throw new Error(message); }
 function parseArgs(argv) {
   const [command, ...rest] = argv;
   if (!["generate", "edit", "generate-batch"].includes(command)) die("Command must be generate, edit, or generate-batch.");
-  const args = { command, model: DEFAULT_MODEL, n: 1, size: "auto", quality: "medium", out: DEFAULT_OUT, augment: true, images: [] };
+  const args = { command, model: DEFAULT_MODEL, n: 1, size: "auto", quality: "medium", out: DEFAULT_OUT, augment: true, images: [], concurrency: 3 };
   for (let i = 0; i < rest.length; i += 1) {
     const token = rest[i];
     if (token === "--force" || token === "--dry-run" || token === "--no-augment" || token === "--fail-fast") {
@@ -37,6 +37,7 @@ function parseArgs(argv) {
     if (key === "image") args.images.push(value);
     else args[key] = ["n", "output_compression", "concurrency", "max_attempts"].includes(key) ? Number(value) : value;
   }
+  if (!Number.isInteger(args.concurrency) || args.concurrency < 1 || args.concurrency > 5) die("--concurrency must be an integer from 1 to 5.");
   return args;
 }
 
@@ -134,14 +135,36 @@ async function runOne(args, model, job) {
   await saveImages(images, paths, effectiveArgs);
 }
 
+async function runBatch(args, jobs) {
+  let nextJobIndex = 0;
+  let firstError;
+  const workerCount = Math.min(args.concurrency, jobs.length);
+
+  async function worker(workerIndex) {
+    while (firstError === undefined) {
+      const batchIndex = nextJobIndex;
+      nextJobIndex += 1;
+      if (batchIndex >= jobs.length) return;
+      const job = jobs[batchIndex];
+      console.error(`[imagegen] worker ${workerIndex + 1}: starting job ${batchIndex + 1}/${jobs.length}`);
+      try {
+        await runOne({ ...args, command: "generate", batch_index: batchIndex }, job.model ?? args.model, job);
+      } catch (error) {
+        firstError = error;
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, (_, workerIndex) => worker(workerIndex)));
+  if (firstError) throw firstError;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.command === "generate-batch") {
     if (!args.input || !args.out_dir) die("generate-batch requires --input and --out-dir.");
     const jobs = (await readFile(args.input, "utf8")).split(/\r?\n/).filter(line => line.trim() && !line.trim().startsWith("#")).map(line => line.trim().startsWith("{") ? JSON.parse(line) : { prompt: line });
-    for (const [batchIndex, job] of jobs.entries()) {
-      await runOne({ ...args, command: "generate", batch_index: batchIndex }, job.model ?? args.model, job);
-    }
+    await runBatch(args, jobs);
     return;
   }
   await runOne(args, args.model, undefined);

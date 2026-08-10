@@ -39,10 +39,10 @@ Use JSONL with one object per distinct asset:
 {"prompt":"The same mug in a bright kitchen scene","size":"1536x1024","n":2}
 ```
 
-Run the core CLI because retries occur per command rather than per batch job:
+The core CLI runs batch jobs with three concurrent workers by default. Set `--concurrency` from `1` to `5` to tune concurrent API requests.
 
 ```bat
-"%NODE_RUN%" "%CODEX_HOME%\skills\imagegenauto\scripts\image_gen.mjs" generate-batch --input "tmp\imagegen\prompts.jsonl" --out-dir "output\imagegen\batch"
+"%NODE_RUN%" "%CODEX_HOME%\skills\imagegenauto\scripts\image_gen.mjs" generate-batch --input "tmp\imagegen\prompts.jsonl" --out-dir "output\imagegen\batch" --concurrency 3
 ```
 
 Outputs are numbered by job, such as `image_1.png`, `image_2-1.png`, and `image_2-2.png`. JSONL fields override command defaults.
