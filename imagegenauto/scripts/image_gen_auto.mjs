@@ -10,7 +10,11 @@ const models = [...new Set([configuredModel, "gpt-image-2", "gpt-image-1.5", "gp
 const script = resolve(dirname(fileURLToPath(import.meta.url)), "image_gen.mjs");
 const args = process.argv.slice(2);
 const explicitlySelected = args.includes("--model") ? args[args.indexOf("--model") + 1] : undefined;
-const candidates = explicitlySelected ? [explicitlySelected] : models;
+const candidates = explicitlySelected
+  ? [explicitlySelected]
+  : configuredModel?.startsWith("gemini-")
+    ? [configuredModel]
+    : models;
 const outputIndex = args.indexOf("--out");
 const output = outputIndex >= 0 ? args[outputIndex + 1] : undefined;
 

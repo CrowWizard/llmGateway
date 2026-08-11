@@ -24,7 +24,7 @@ function die(message) { throw new Error(message); }
 function parseArgs(argv) {
   const [command, ...rest] = argv;
   if (!["generate", "edit", "generate-batch"].includes(command)) die("Command must be generate, edit, or generate-batch.");
-  const args = { command, model: DEFAULT_MODEL, n: 1, size: "auto", quality: "medium", out: DEFAULT_OUT, augment: true, images: [], concurrency: 3 };
+  const args = { command, model: DEFAULT_MODEL, provider: "auto", n: 1, size: "auto", quality: "medium", out: DEFAULT_OUT, augment: true, images: [], concurrency: 3 };
   for (let i = 0; i < rest.length; i += 1) {
     const token = rest[i];
     if (token === "--force" || token === "--dry-run" || token === "--no-augment" || token === "--fail-fast") {
@@ -68,6 +68,23 @@ function provider() {
   return { apiKey, baseUrl: baseUrl.replace(/\/$/, "") };
 }
 
+function providerFor(args, model) {
+  const providerName = args.provider === "auto" ? (model.startsWith("gemini-") ? "gemini" : "openai") : args.provider;
+  if (providerName === "gemini") {
+    const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY ?? process.env.OPENAI_API_KEY;
+    if (!apiKey) die("GEMINI_API_KEY, GOOGLE_API_KEY, or OPENAI_API_KEY is not set. Export one before running.");
+    const baseUrl = process.env.GEMINI_BASE_URL ?? process.env.OPENAI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta";
+    if (!/^https?:\/\//i.test(baseUrl)) die("GEMINI_BASE_URL must be an HTTP(S) URL.");
+    return { name: providerName, apiKey, baseUrl: baseUrl.replace(/\/$/, "") };
+  }
+  if (providerName !== "openai") die(`Unsupported provider: ${providerName}. Use auto, openai, or gemini.`);
+  return { name: providerName, ...provider() };
+}
+
+function providerNameFor(args, model) {
+  return args.provider === "auto" ? (model.startsWith("gemini-") ? "gemini" : "openai") : args.provider;
+}
+
 async function requestJson(client, path, body) {
   const response = await fetch(`${client.baseUrl}${path}`, { method: "POST", headers: { Authorization: `Bearer ${client.apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!response.ok) throw new ProviderError(response.status, (await response.text()).slice(0, 1000));
@@ -82,6 +99,25 @@ async function requestEdit(client, args, payload) {
   const response = await fetch(`${client.baseUrl}/images/edits`, { method: "POST", headers: { Authorization: `Bearer ${client.apiKey}` }, body: form });
   if (!response.ok) throw new ProviderError(response.status, (await response.text()).slice(0, 1000));
   return response.json();
+}
+
+async function requestGemini(client, model, prompt) {
+  const response = await fetch(`${client.baseUrl}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(client.apiKey)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { responseModalities: ["TEXT", "IMAGE"] }
+    })
+  });
+  if (!response.ok) throw new ProviderError(response.status, (await response.text()).slice(0, 1000));
+  const result = await response.json();
+  const images = [];
+  for (const part of result.candidates?.flatMap(candidate => candidate.content?.parts ?? []) ?? []) {
+    const data = part.inlineData?.data ?? part.inline_data?.data;
+    if (data) images.push(data);
+  }
+  return images;
 }
 
 async function outputPaths(args, format, count) {
@@ -127,10 +163,15 @@ async function runOne(args, model, job) {
   const payload = payloadFor(effectiveArgs, prompt, model);
   const paths = await outputPaths(effectiveArgs, payload.output_format, effectiveArgs.n);
   const downscaled = effectiveArgs.downscale_max_dim ? paths.map(path => downscaledPath(path, effectiveArgs.downscale_suffix ?? "-web")) : undefined;
-  if (effectiveArgs.dry_run) { console.log(JSON.stringify({ endpoint: effectiveArgs.command === "edit" ? "/v1/images/edits" : "/v1/images/generations", outputs: paths, outputs_downscaled: downscaled, ...payload }, null, 2)); return; }
-  const client = provider();
-  const result = effectiveArgs.command === "edit" ? await requestEdit(client, effectiveArgs, payload) : await requestJson(client, "/images/generations", payload);
-  const images = (result.data ?? []).map(item => item.b64_json).filter(Boolean);
+  const providerName = providerNameFor(effectiveArgs, model);
+  const endpoint = providerName === "gemini" ? `/models/${model}:generateContent` : effectiveArgs.command === "edit" ? "/v1/images/edits" : "/v1/images/generations";
+  if (effectiveArgs.dry_run) { console.log(JSON.stringify({ provider: providerName, endpoint, outputs: paths, outputs_downscaled: downscaled, ...payload }, null, 2)); return; }
+  if (providerName === "gemini" && effectiveArgs.n !== 1) die("Gemini generateContent image generation currently supports exactly one image; use --n 1.");
+  const client = providerFor(effectiveArgs, model);
+  if (client.name === "gemini" && effectiveArgs.command === "edit") die("Gemini provider currently supports generate only; use --provider openai for image edits.");
+  const images = client.name === "gemini"
+    ? await requestGemini(client, model, prompt)
+    : (effectiveArgs.command === "edit" ? await requestEdit(client, effectiveArgs, payload) : await requestJson(client, "/images/generations", payload)).data?.map(item => item.b64_json).filter(Boolean) ?? [];
   if (!images.length) die("Image provider did not return base64 image data.");
   await saveImages(images, paths, effectiveArgs);
 }

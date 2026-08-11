@@ -5,8 +5,15 @@ Use this file for API and model controls supported by the bundled `scripts/image
 These parameters describe the Image API and bundled Node CLI surface.
 
 ## Scope
-- This fallback CLI is intended for GPT Image models (`gpt-image-2`, `gpt-image-1.5`, `gpt-image-1`, and `gpt-image-1-mini`).
+- OpenAI-compatible Images and Imagen models use `/v1/images/generations` and `/v1/images/edits`.
+- Gemini image models use `models/{model}:generateContent` and currently support text-to-image generation only.
 - The built-in `image_gen` tool and the fallback CLI do not expose the same controls.
+
+## Gemini image models
+
+Model IDs starting with `gemini-` are routed to Gemini `generateContent`, not to `/v1/images/generations`. By default the CLI reuses `OPENAI_API_KEY` and `OPENAI_BASE_URL`, so existing saved OpenAI-compatible settings continue to work. Set `GEMINI_API_KEY` or `GOOGLE_API_KEY`, and optionally `GEMINI_BASE_URL` (default when no OpenAI base URL is set: `https://generativelanguage.googleapis.com/v1beta`) to override them. The request contains the prompt as a text part; the CLI extracts returned `inlineData.data` or `inline_data.data` parts and writes the base64 image.
+
+Gemini generation currently accepts exactly one output image (`--n 1`) and does not support the OpenAI-only `size`, `quality`, `background`, `mask`, or `input_fidelity` controls. Use `--provider gemini` to force this protocol when the model ID does not use the `gemini-` prefix.
 
 ## Model summary
 

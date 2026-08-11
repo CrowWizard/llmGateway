@@ -5,7 +5,7 @@ description: Plan and generate polished ecommerce product images, then edit supp
 
 # Product Listing Images
 
-Use the installed `imagegenauto` Skill to create a coherent product-image set. Before generating, identify the product, target marketplace, audience, visual goal, mandatory product facts, and prohibited claims.
+Use the installed `imagegenauto` Skill to create a coherent product-image set. Before generating, identify the product, target marketplace, audience, visual goal, mandatory product facts, and prohibited claims. Select the image protocol before execution: use an OpenAI-compatible Images/Imagen model for reference-image edits, and use a Gemini image model only for text-to-image generation.
 
 ## Core Rules
 
@@ -13,7 +13,7 @@ Use the installed `imagegenauto` Skill to create a coherent product-image set. B
 - For edits, preservation requirements take priority over creative direction. State what must remain unchanged before describing the requested change.
 - Inspect every supplied image before editing. Do not infer hidden or occluded product details.
 - Ask a concise clarifying question when the requested outcome is ambiguous.
-- Use `image_edit` whenever a product reference image is supplied; use `image_generate` only for a new image without a reference.
+- Use `image_edit` whenever a product reference image is supplied; use `image_generate` only for a new image without a reference. Gemini models currently support `image_generate` only; when a reference image is supplied, select an OpenAI-compatible Images or Imagen model instead.
 - Keep each output image focused on one selling purpose. Use verified typography in a dedicated design workflow rather than relying on generated text for legal claims or dimensions.
 
 ## Reference Loading Contract
@@ -57,7 +57,13 @@ set "IMAGE_GEN=%CODEX_HOME%\skills\imagegenauto\scripts\image_gen_auto.mjs"
 
 Generate a new listing image with `"%NODE_RUN%" "%IMAGE_GEN%" generate ...`. When a product reference exists, use `edit --image <path> ...` so product identity and geometry can be preserved. Save final assets under the current project's `output/imagegen/` directory.
 
-The CLI requires `OPENAI_API_KEY`; `OPENAI_BASE_URL` and `OPENAI_IMAGE_MODEL` are optional. Never request a secret in chat. Do not invoke npm, Python, or PowerShell.
+For OpenAI-compatible Images and Imagen models, configure `OPENAI_API_KEY`, with optional `OPENAI_BASE_URL` and `OPENAI_IMAGE_MODEL`. Gemini text-to-image generation reuses `OPENAI_API_KEY` and `OPENAI_BASE_URL` by default; `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) and `GEMINI_BASE_URL` override those values when needed. Choose a model whose ID starts with `gemini-`. Gemini generation returns one image per request and does not support `image_edit`. Never request a secret in chat. Do not invoke npm, Python, or PowerShell.
+
+### Model selection
+
+- New image with no product reference: `gemini-*-image-*` may use Gemini `generateContent`; `imagen-*` and `gpt-image-*` use the OpenAI-compatible Images endpoint.
+- Product image edit, recolor, background replacement, logo application, or any task with `--image`: use an OpenAI-compatible Images or Imagen model because the current Gemini adapter is generation-only.
+- Keep the same provider and model family across a listing set when product fidelity and visual consistency matter. Do not silently replace a requested Gemini model with an OpenAI or Imagen model; report the protocol limitation and select a compatible model.
 
 ## Prompt Pattern
 
