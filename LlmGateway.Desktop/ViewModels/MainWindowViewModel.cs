@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Net;
+using System.Net.Sockets;
 using Avalonia.Threading;
 using LlmGateway.Desktop.Infrastructure;
 using LlmGateway.Desktop.Models;
@@ -182,9 +184,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
     public bool IsDirectCodexMode => !CompatibilityMode;
-    public string EffectiveCodexBaseUrl => CompatibilityMode
-        ? $"http://127.0.0.1:{ListenPort}/v1"
-        : CodexBaseUrl;
+    public string EffectiveCodexBaseUrl => LocalGatewayBaseUrl;
     public bool LogTraffic { get => _logTraffic; set => SetProperty(ref _logTraffic, value); }
     public bool IsGatewayRunning
     {
@@ -266,6 +266,7 @@ public sealed class MainWindowViewModel : ObservableObject
             RefreshBackups();
             RefreshApplicationStatus();
             GatewayStatus = $"配置文件：{_gatewaySettingsService.SettingsPath}";
+            _ = SynchronizeLocalGatewayClientConfigurationAsync();
             _ = RefreshGatewayStatusAsync();
         }
         catch (Exception exception)
@@ -302,24 +303,15 @@ public sealed class MainWindowViewModel : ObservableObject
             var previousConfigurationName = EndpointNormalizer.GetConfigurationName(
                 IsLocalGatewayUrl(previousBaseUrl) ? UpstreamBaseUrl : previousBaseUrl);
             var backup = hasExistingConfiguration ? _backupService.Create(previousConfigurationName).DisplayName : string.Empty;
-            var endpoint = CompatibilityMode ? UpstreamBaseUrl : CodexBaseUrl;
+            var endpoint = UpstreamBaseUrl;
             Provider = EndpointNormalizer.GetConfigurationName(endpoint);
             EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(endpoint);
             await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
             await RestartGatewayIfRunningAsync();
-            if (CompatibilityMode)
-            {
-                await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
-            }
-            else
-            {
-                await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
-            }
+            await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
+            await _environmentService.SaveAsync("OPENAI_BASE_URL", LocalGatewayBaseUrl);
             if (saveImageConfiguration)
             {
-                await _environmentService.SaveAsync(
-                    "OPENAI_BASE_URL",
-                    EndpointNormalizer.Normalize(CodexBaseUrl));
                 await _environmentService.SaveAsync("OPENAI_API_KEY", ImageApiKey);
                 await _environmentService.SaveAsync("OPENAI_IMAGE_MODEL", ImageModel.Trim());
             }
@@ -349,10 +341,17 @@ public sealed class MainWindowViewModel : ObservableObject
         try
         {
             await _launcher.CloseManagedClientsAsync();
+            var originalPort = ListenPort;
+            EnsureGatewayPortIsAvailable();
+            ApplyEndpointIdentity(UpstreamBaseUrl);
             await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
+            await _environmentService.SaveAsync("OPENAI_BASE_URL", LocalGatewayBaseUrl);
+            await _codexConfig.SaveAsync(CurrentCodexSettings());
             await _gatewayServiceManager.StartAsync();
             IsGatewayRunning = true;
-            GatewayStatus = $"Windows 服务已启动：监听 http://{LocalBindIp}:{ListenPort}";
+            GatewayStatus = originalPort == ListenPort
+                ? $"Windows 服务已启动：监听 http://{LocalBindIp}:{ListenPort}"
+                : $"端口 {originalPort} 已被占用，已改用 {ListenPort}；Windows 服务已启动。";
         }
         catch (Exception exception)
         {
@@ -428,7 +427,25 @@ public sealed class MainWindowViewModel : ObservableObject
         IsGatewayRunning = status.Contains("运行中", StringComparison.Ordinal);
         if (IsGatewayRunning)
         {
-            await _gatewayServiceManager.RestartAsync();
+            await _gatewayServiceManager.StopAsync();
+            EnsureGatewayPortIsAvailable();
+            await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
+            await _gatewayServiceManager.StartAsync();
+        }
+    }
+
+    private async Task SynchronizeLocalGatewayClientConfigurationAsync()
+    {
+        try
+        {
+            ApplyEndpointIdentity(UpstreamBaseUrl);
+            await _environmentService.SaveAsync("OPENAI_BASE_URL", LocalGatewayBaseUrl);
+            await _codexConfig.SaveAsync(CurrentCodexSettings());
+        }
+        catch (Exception exception)
+        {
+            LogError("同步本地网关客户端配置", exception);
+            CodexStatus = $"同步本地网关配置失败：{exception.Message}";
         }
     }
 
@@ -648,6 +665,35 @@ public sealed class MainWindowViewModel : ObservableObject
         (string.Equals(uri.Host, "127.0.0.1", StringComparison.Ordinal) ||
          string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase));
 
+    private string LocalGatewayBaseUrl => $"http://127.0.0.1:{ListenPort}/v1";
+
+    private void EnsureGatewayPortIsAvailable()
+    {
+        while (!IsTcpPortAvailable(ListenPort))
+        {
+            if (ListenPort >= 65535)
+            {
+                throw new InvalidOperationException("找不到可用的本地网关端口。");
+            }
+
+            ListenPort++;
+        }
+    }
+
+    private static bool IsTcpPortAvailable(int port)
+    {
+        try
+        {
+            using var listener = new TcpListener(IPAddress.Loopback, port);
+            listener.Start();
+            return true;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
+    }
+
     private void LogError(string operation, Exception exception) => _errorLogService.Write(operation, exception);
 
     private void ApplyEndpointIdentity(string endpoint)
@@ -693,9 +739,9 @@ public sealed class MainWindowViewModel : ObservableObject
     private CodexSettings CurrentCodexSettings() => new()
     {
         Model = Model,
-        Provider = Provider,
-        BaseUrl = EndpointNormalizer.Normalize(EffectiveCodexBaseUrl),
-        EnvironmentKey = EnvironmentKey
+        Provider = EndpointNormalizer.GetConfigurationName(UpstreamBaseUrl),
+        BaseUrl = LocalGatewayBaseUrl,
+        EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(UpstreamBaseUrl)
     };
 
     private void ApplyGateway(GatewaySettings settings)
@@ -703,6 +749,7 @@ public sealed class MainWindowViewModel : ObservableObject
         LocalBindIp = settings.LocalBindIp;
         ListenPort = settings.ListenPort;
         UpstreamBaseUrl = EndpointNormalizer.Normalize(settings.UpstreamBaseUrl);
+        ApplyEndpointIdentity(UpstreamBaseUrl);
         ResponsesMode = settings.ResponsesMode;
         GeminiImageApiKey = settings.GeminiImageApiKey;
         _endpointMappings = new Dictionary<string, string>(settings.EndpointMappings, StringComparer.OrdinalIgnoreCase);
@@ -718,8 +765,6 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         Model = settings.Model;
         CodexBaseUrl = EndpointNormalizer.Normalize(settings.BaseUrl);
-        Provider = EndpointNormalizer.GetConfigurationName(CodexBaseUrl);
-        EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(CodexBaseUrl);
         Models.Clear();
         Models.Add(Model);
     }

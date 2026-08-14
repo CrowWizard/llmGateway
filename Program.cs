@@ -1,6 +1,10 @@
 using Yarp.ReverseProxy.Configuration;
 using Yarp.ReverseProxy.Forwarder;
 using Yarp.ReverseProxy.Transforms;
+using System.Net;
+using System.Net.Sockets;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseContentRoot(AppContext.BaseDirectory);
@@ -20,6 +24,22 @@ var responsesMode = gateway["ResponsesMode"] ?? "Auto";
 var geminiImageApiKey = gateway["GeminiImageApiKey"]?.Trim();
 var localBindIp = gateway["LocalBindIp"] ?? "127.0.0.1";
 var listenPort = gateway.GetValue("ListenPort", 3001);
+var configuredListenPort = listenPort;
+while (!IsTcpPortAvailable(localBindIp, listenPort))
+{
+    if (listenPort >= 65535)
+    {
+        throw new InvalidOperationException("找不到可用的本地网关端口。");
+    }
+
+    listenPort++;
+}
+
+if (listenPort != configuredListenPort)
+{
+    PersistListenPort(listenPort);
+}
+
 var listenUrl = $"http://{(localBindIp.Contains(':') ? $"[{localBindIp}]" : localBindIp)}:{listenPort}";
 builder.WebHost.UseUrls(listenUrl);
 builder.Services.AddHttpClient("responses-compatibility", client =>
@@ -183,6 +203,41 @@ Console.WriteLine("  改配置: 同目录 appsettings.json -> 重启");
 Console.WriteLine("========================================");
 
 app.Run();
+
+static bool IsTcpPortAvailable(string bindIp, int port)
+{
+    var address = IPAddress.TryParse(bindIp, out var parsedAddress)
+        ? parsedAddress
+        : IPAddress.Any;
+    try
+    {
+        using var listener = new TcpListener(address, port);
+        listener.Start();
+        return true;
+    }
+    catch (SocketException)
+    {
+        return false;
+    }
+}
+
+static void PersistListenPort(int port)
+{
+    var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+    if (!File.Exists(path))
+    {
+        return;
+    }
+
+    var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
+    if (root?["Gateway"] is not JsonObject gateway)
+    {
+        return;
+    }
+
+    gateway["ListenPort"] = port;
+    File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
+}
 
 static class TrafficLogging
 {
