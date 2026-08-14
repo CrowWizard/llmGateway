@@ -29,8 +29,12 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Restore
-        run: dotnet restore LlmGateway.Tests/LlmGateway.Tests.csproj --runtime win-x64
+      - name: Restore gateway, desktop and tests
+        shell: pwsh
+        run: |
+          dotnet restore LlmGateway.csproj --runtime win-x64
+          dotnet restore LlmGateway.Desktop/LlmGateway.Desktop.csproj --runtime win-x64
+          dotnet restore LlmGateway.Tests/LlmGateway.Tests.csproj --runtime win-x64
 
       - name: Test
         run: dotnet test LlmGateway.Tests/LlmGateway.Tests.csproj --no-restore --configuration Release
