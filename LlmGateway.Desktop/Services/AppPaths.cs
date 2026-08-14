@@ -30,6 +30,8 @@ public sealed class AppPaths
     public string ImageGenAutoDirectory => Path.Combine(ApplicationDirectory, "imagegenauto");
     public string EcommerceImageStudioDirectory => Path.Combine(ApplicationDirectory, "ecommerce-image-studio");
     public string GatewaySettingsPath => Path.Combine(ApplicationDirectory, "appsettings.json");
+    public string GatewayExecutablePath => Path.Combine(ApplicationDirectory, OperatingSystem.IsWindows() ? "LlmGateway.exe" : "LlmGateway");
+    public string GatewayServiceName => "LlmGateway";
     public string LinuxEnvironmentPath => Path.Combine(CodexDirectory, "llm-gateway.env");
     public string MacOsLaunchAgentsDirectory => Path.Combine(UserHome, "Library", "LaunchAgents");
     public string MacOsEnvironmentLaunchAgentPath(string name) =>

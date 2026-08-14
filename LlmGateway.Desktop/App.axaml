@@ -25,4 +25,22 @@
     <FluentTheme />
     <StyleInclude Source="avares://LlmGateway.Desktop/Styles/Controls.axaml" />
   </Application.Styles>
+  <TrayIcon.Icons>
+    <TrayIcons>
+      <TrayIcon Icon="/Assets/codex-config.ico" ToolTipText="LlmGateway 控制台" Click="OnTrayIconClick">
+        <TrayIcon.Menu>
+          <NativeMenu>
+            <NativeMenuItem Header="打开控制台" Click="OnShowWindowClick" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="安装网关服务" Click="OnInstallGatewayServiceClick" />
+            <NativeMenuItem Header="启动网关服务" Click="OnStartGatewayServiceClick" />
+            <NativeMenuItem Header="停止网关服务" Click="OnStopGatewayServiceClick" />
+            <NativeMenuItem Header="卸载网关服务" Click="OnUninstallGatewayServiceClick" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="退出控制台" Click="OnExitDesktopClick" />
+          </NativeMenu>
+        </TrayIcon.Menu>
+      </TrayIcon>
+    </TrayIcons>
+  </TrayIcon.Icons>
 </Application>

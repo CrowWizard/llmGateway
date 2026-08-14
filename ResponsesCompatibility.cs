@@ -2,9 +2,11 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Collections.Concurrent;
 
 static class ResponsesCompatibility
 {
+    private static readonly ConcurrentDictionary<string, bool> NativeResponsesSupport = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> UnsupportedParameters = new(StringComparer.Ordinal)
     {
         "background", "conversation", "context_management", "previous_response_id", "prompt"
@@ -15,7 +17,8 @@ static class ResponsesCompatibility
         IHttpClientFactory httpClientFactory,
         string upstreamBaseUrl,
         IReadOnlyDictionary<string, string> extraHeaders,
-        bool logTraffic)
+        bool logTraffic,
+        string mode = "Auto")
     {
         JsonObject request;
         try
@@ -29,6 +32,50 @@ static class ResponsesCompatibility
             return;
         }
 
+        var normalizedMode = NormalizeMode(mode);
+        var hasCachedNativeSupport = NativeResponsesSupport.TryGetValue(upstreamBaseUrl, out var supportsNativeResponses);
+        var tryNativeResponses = normalizedMode == "Responses"
+            || (normalizedMode == "Auto" && (!hasCachedNativeSupport || supportsNativeResponses));
+        if (tryNativeResponses)
+        {
+            HttpResponseMessage nativeResponse;
+            try
+            {
+                nativeResponse = await SendAsync(context, httpClientFactory, request, upstreamBaseUrl, extraHeaders, "/v1/responses");
+            }
+            catch (TimeoutException exception)
+            {
+                await WriteErrorAsync(context, StatusCodes.Status504GatewayTimeout, exception.Message, null, "upstream_timeout");
+                return;
+            }
+            catch (HttpRequestException exception)
+            {
+                await WriteErrorAsync(context, StatusCodes.Status502BadGateway, exception.Message, null, "upstream_error");
+                return;
+            }
+
+            if (nativeResponse.IsSuccessStatusCode)
+            {
+                NativeResponsesSupport[upstreamBaseUrl] = true;
+                if (logTraffic)
+                {
+                    Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff}] [{context.TraceIdentifier}] [端点映射] POST /v1/responses -> POST /v1/responses");
+                }
+                await CopyResponseAsync(context, nativeResponse);
+                return;
+            }
+
+            var shouldFallback = normalizedMode == "Auto" && IsUnsupportedEndpoint(nativeResponse.StatusCode);
+            if (!shouldFallback)
+            {
+                await CopyResponseAsync(context, nativeResponse);
+                return;
+            }
+
+            NativeResponsesSupport[upstreamBaseUrl] = false;
+            nativeResponse.Dispose();
+        }
+
         if (!TryConvertRequest(request, out var chatRequest, out var error))
         {
             await WriteErrorAsync(context, StatusCodes.Status400BadRequest, error!.Value.Message, error.Value.Parameter, "unsupported_parameter");
@@ -40,7 +87,8 @@ static class ResponsesCompatibility
             context,
             chatRequest!,
             upstreamBaseUrl,
-            extraHeaders);
+            extraHeaders,
+            "/v1/chat/completions");
 
         if (logTraffic)
         {
@@ -82,6 +130,59 @@ static class ResponsesCompatibility
             {
                 await ConvertResponseAsync(context, upstreamResponse);
             }
+        }
+    }
+
+    private static string NormalizeMode(string mode) => mode.Trim().ToLowerInvariant() switch
+    {
+        "responses" => "Responses",
+        "chatcompletions" or "chat-completions" or "chat_completions" => "ChatCompletions",
+        _ => "Auto"
+    };
+
+    private static bool IsUnsupportedEndpoint(System.Net.HttpStatusCode statusCode) =>
+        statusCode is System.Net.HttpStatusCode.NotFound
+            or System.Net.HttpStatusCode.MethodNotAllowed
+            or System.Net.HttpStatusCode.NotImplemented;
+
+    private static async Task<HttpResponseMessage> SendAsync(
+        HttpContext context,
+        IHttpClientFactory httpClientFactory,
+        JsonObject body,
+        string upstreamBaseUrl,
+        IReadOnlyDictionary<string, string> extraHeaders,
+        string endpoint)
+    {
+        using var request = CreateUpstreamRequest(context, body, upstreamBaseUrl, extraHeaders, endpoint);
+        try
+        {
+            return await httpClientFactory.CreateClient("responses-compatibility").SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                context.RequestAborted);
+        }
+        catch (OperationCanceledException) when (!context.RequestAborted.IsCancellationRequested)
+        {
+            throw new TimeoutException("The upstream request timed out.");
+        }
+    }
+
+    private static async Task CopyResponseAsync(HttpContext context, HttpResponseMessage upstreamResponse)
+    {
+        using (upstreamResponse)
+        {
+            context.Response.StatusCode = (int)upstreamResponse.StatusCode;
+            foreach (var header in upstreamResponse.Headers)
+            {
+                context.Response.Headers[header.Key] = header.Value.ToArray();
+            }
+            foreach (var header in upstreamResponse.Content.Headers)
+            {
+                context.Response.Headers[header.Key] = header.Value.ToArray();
+            }
+            context.Response.Headers.Remove("transfer-encoding");
+            await using var stream = await upstreamResponse.Content.ReadAsStreamAsync(context.RequestAborted);
+            await stream.CopyToAsync(context.Response.Body, context.RequestAborted);
         }
     }
 
@@ -659,9 +760,10 @@ static class ResponsesCompatibility
         HttpContext context,
         JsonObject body,
         string upstreamBaseUrl,
-        IReadOnlyDictionary<string, string> extraHeaders)
+        IReadOnlyDictionary<string, string> extraHeaders,
+        string endpoint)
     {
-        var uri = $"{upstreamBaseUrl.TrimEnd('/')}/v1/chat/completions";
+        var uri = $"{upstreamBaseUrl.TrimEnd('/')}{endpoint}";
         var request = new HttpRequestMessage(HttpMethod.Post, uri)
         {
             Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json")

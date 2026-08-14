@@ -106,6 +106,60 @@
             </StackPanel>
           </Border>
 
+          <Border Classes="card">
+            <StackPanel Spacing="14">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="section-title" Text="本地网关服务" />
+                  <TextBlock Classes="caption" Text="LlmGateway CLI 作为 Windows 服务运行；保存网关配置时会自动重启并生效。" TextWrapping="Wrap" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding GatewayStateText}" VerticalAlignment="Center" />
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="caption" Text="上游 Base URL" />
+                  <TextBox Text="{Binding UpstreamBaseUrl}" PlaceholderText="https://api.example.com" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Width="130" Spacing="6">
+                  <TextBlock Classes="caption" Text="监听端口" />
+                  <NumericUpDown Minimum="1" Maximum="65535" Value="{Binding ListenPort}" />
+                </StackPanel>
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="caption" Text="监听 IP" />
+                  <TextBox Text="{Binding LocalBindIp}" PlaceholderText="127.0.0.1" />
+                </StackPanel>
+                <CheckBox Grid.Column="1" IsChecked="{Binding LogTraffic}" Content="记录代理流量" VerticalAlignment="End" />
+              </Grid>
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="Responses 映射" />
+                <ComboBox SelectedItem="{Binding ResponsesMode}" IsEditable="True">
+                  <x:String>Auto</x:String>
+                  <x:String>Responses</x:String>
+                  <x:String>ChatCompletions</x:String>
+                </ComboBox>
+              </StackPanel>
+              <Border Height="1" Background="{DynamicResource BorderSubtleBrush}" />
+              <StackPanel Spacing="4">
+                <TextBlock Classes="section-title" Text="Gemini Image" />
+                <TextBlock Classes="caption" Text="使用 /v1beta 到 /v1beta 映射，并为 Gemini 原生图片请求使用独立密钥。" TextWrapping="Wrap" />
+              </StackPanel>
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="Gemini Image API Key" />
+                <TextBox Text="{Binding GeminiImageApiKey}" PasswordChar="●" RevealPassword="{Binding IsApiKeyVisible}" PlaceholderText="输入 Gemini Image API Key" />
+              </StackPanel>
+              <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="8">
+                <Button Classes="secondary" Command="{Binding StartGatewayCommand}" Content="启动服务" />
+                <Button Grid.Column="1" Classes="secondary" Command="{Binding StopGatewayCommand}" Content="停止服务" />
+                <Button Grid.Column="2" Classes="ghost" Command="{Binding InstallGatewayServiceCommand}" Content="安装服务" />
+                <Button Grid.Column="3" Classes="ghost" Command="{Binding UninstallGatewayServiceCommand}" Content="卸载服务" />
+                <Button Grid.Column="4" HorizontalAlignment="Right" Classes="ghost" Command="{Binding RefreshGatewayStatusCommand}" Content="刷新状态" />
+              </Grid>
+              <TextBlock Classes="caption" Text="{Binding GatewayStatus}" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+
           <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
             <Border Classes="card">
               <StackPanel Spacing="14">

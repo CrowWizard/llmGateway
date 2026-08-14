@@ -1,10 +1,18 @@
 # LlmGateway
 
+`LlmGateway` 是独立 CLI 网关程序，`LlmGateway.Desktop` 是配置与托盘控制程序。
+
+在 Windows 上将两个发布程序与同一份 `appsettings.json` 放在同一个目录。桌面程序可安装 CLI 为名为 `LlmGateway` 的 Windows 服务；服务使用 `--service` 模式启动，并从 CLI 所在目录读取配置。界面保存网关配置后，会自动重启正在运行的服务，使上游地址、端口和请求头立即生效。
+
+服务安装、启动、停止和卸载需要以管理员身份运行桌面程序。关闭主窗口会最小化到系统托盘；从托盘退出仅关闭桌面控制程序，不会停止已安装的网关服务。
+
+# LlmGateway
+
 本机 LLM API 反向代理（基于 **YARP**），发布为单文件 `LlmGateway.exe`。
 
 ## 解决什么问题
 
-本程序在本机监听端口，将 OpenAI `/v1/responses` 请求转换为上游 `/v1/chat/completions`，并把 JSON 或 SSE 流式响应转换回 Responses 格式。其他 API 路径由 YARP 原样代理。
+本程序在本机监听端口，并通过 `Gateway:ResponsesMode` 映射文字模型：`Auto` 先原样调用上游 `/v1/responses`，仅在上游明确不支持端点时自动转换到 `/v1/chat/completions`；`Responses` 强制原样转发；`ChatCompletions` 强制协议转换。图像、视频和 Gemini 特殊 API 由 YARP 透明转发，并可通过 `Gateway:EndpointMappings` 配置外部路径到供应商路径的前缀映射。
 
 ```
 Codex / 其他客户端
@@ -30,7 +38,7 @@ Windows 会把 Key 写入当前用户环境变量；Linux 会写入 `~/.codex/ll
 
 macOS 会将变量写入 `~/.codex/llm-gateway.env`，同时通过 `launchctl setenv` 更新当前登录会话，并在 `~/Library/LaunchAgents/` 创建用户 LaunchAgent，以便下次登录后新启动的 GUI 客户端也能读取。不会修改 `~/.zshrc`。
 
-`dev` 分支推送会触发 `.github/workflows/dev-windows.yml`，仅在 Windows runner 发布 `win-x64` 桌面版和网关版产物，不生成 Linux 版本。
+推送或提交 Pull Request 到 `dev`、`main` 或 `ailili-main` 会触发 [.github/workflows/dev-windows.yml](.github/workflows/dev-windows.yml)。工作流仅使用 Windows runner，运行测试并发布合并后的 `win-x64` 桌面版和网关版产物，不构建 Linux 版本。
 
 ## 环境要求
 

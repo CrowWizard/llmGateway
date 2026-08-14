@@ -10,7 +10,7 @@ public sealed class MainWindowViewModel : ObservableObject
 {
     private readonly AppPaths _paths;
     private readonly GatewaySettingsService _gatewaySettingsService;
-    private readonly GatewayHostService _gatewayHost;
+    private readonly GatewayServiceManager _gatewayServiceManager;
     private readonly CodexConfigService _codexConfig;
     private readonly CodexAuthService _codexAuth;
     private readonly CodexBackupService _backupService;
@@ -29,6 +29,9 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _localBindIp = "127.0.0.1";
     private int _listenPort = 23001;
     private string _upstreamBaseUrl = string.Empty;
+    private string _responsesMode = "Auto";
+    private string _geminiImageApiKey = string.Empty;
+    private Dictionary<string, string> _endpointMappings = new(StringComparer.OrdinalIgnoreCase);
     private bool _compatibilityMode;
     private bool _logTraffic;
     private bool _isGatewayRunning;
@@ -52,7 +55,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public MainWindowViewModel(
         AppPaths paths,
         GatewaySettingsService gatewaySettingsService,
-        GatewayHostService gatewayHost,
+        GatewayServiceManager gatewayServiceManager,
         CodexConfigService codexConfig,
         CodexAuthService codexAuth,
         CodexBackupService backupService,
@@ -68,7 +71,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         _paths = paths;
         _gatewaySettingsService = gatewaySettingsService;
-        _gatewayHost = gatewayHost;
+        _gatewayServiceManager = gatewayServiceManager;
         _codexConfig = codexConfig;
         _codexAuth = codexAuth;
         _backupService = backupService;
@@ -86,6 +89,9 @@ public sealed class MainWindowViewModel : ObservableObject
         _stopGatewayCommand = new AsyncCommand(StopGatewayAsync, () => IsGatewayRunning);
         StartGatewayCommand = _startGatewayCommand;
         StopGatewayCommand = _stopGatewayCommand;
+        InstallGatewayServiceCommand = new AsyncCommand(InstallGatewayServiceAsync);
+        UninstallGatewayServiceCommand = new AsyncCommand(UninstallGatewayServiceAsync);
+        RefreshGatewayStatusCommand = new AsyncCommand(RefreshGatewayStatusAsync);
         SaveConfigurationCommand = new AsyncCommand(SaveConfigurationAsync);
         FetchModelsCommand = new AsyncCommand(FetchModelsAsync);
         FetchImageModelsCommand = new AsyncCommand(FetchImageModelsAsync);
@@ -109,15 +115,6 @@ public sealed class MainWindowViewModel : ObservableObject
             return Task.CompletedTask;
         });
 
-        _gatewayHost.LogReceived += message => Dispatcher.UIThread.Post(() =>
-        {
-            GatewayLogs.Add(message);
-            while (GatewayLogs.Count > 300)
-            {
-                GatewayLogs.RemoveAt(0);
-            }
-        });
-
         Load();
     }
 
@@ -128,6 +125,9 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public AsyncCommand StartGatewayCommand { get; }
     public AsyncCommand StopGatewayCommand { get; }
+    public AsyncCommand InstallGatewayServiceCommand { get; }
+    public AsyncCommand UninstallGatewayServiceCommand { get; }
+    public AsyncCommand RefreshGatewayStatusCommand { get; }
     public AsyncCommand SaveConfigurationCommand { get; }
     public AsyncCommand FetchModelsCommand { get; }
     public AsyncCommand FetchImageModelsCommand { get; }
@@ -166,6 +166,8 @@ public sealed class MainWindowViewModel : ObservableObject
             }
         }
     }
+    public string ResponsesMode { get => _responsesMode; set => SetProperty(ref _responsesMode, value); }
+    public string GeminiImageApiKey { get => _geminiImageApiKey; set => SetProperty(ref _geminiImageApiKey, value); }
     public bool CompatibilityMode
     {
         get => _compatibilityMode;
@@ -246,6 +248,12 @@ public sealed class MainWindowViewModel : ObservableObject
     public string ErrorLogPath => _errorLogService.LogDirectory;
     public string CodexDirectory => _paths.CodexDirectory;
 
+    public void UpdateGatewayStatus(string status)
+    {
+        GatewayStatus = status;
+        IsGatewayRunning = status.Contains("已启动", StringComparison.Ordinal) || status.Contains("运行中", StringComparison.Ordinal);
+    }
+
     private void Load()
     {
         try
@@ -258,6 +266,7 @@ public sealed class MainWindowViewModel : ObservableObject
             RefreshBackups();
             RefreshApplicationStatus();
             GatewayStatus = $"配置文件：{_gatewaySettingsService.SettingsPath}";
+            _ = RefreshGatewayStatusAsync();
         }
         catch (Exception exception)
         {
@@ -296,9 +305,10 @@ public sealed class MainWindowViewModel : ObservableObject
             var endpoint = CompatibilityMode ? UpstreamBaseUrl : CodexBaseUrl;
             Provider = EndpointNormalizer.GetConfigurationName(endpoint);
             EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(endpoint);
+            await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
+            await RestartGatewayIfRunningAsync();
             if (CompatibilityMode)
             {
-                await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
                 await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
             }
             else
@@ -321,9 +331,9 @@ public sealed class MainWindowViewModel : ObservableObject
                 backup = _backupService.Create("原始配置").DisplayName;
             }
             RefreshBackups();
-            GatewayStatus = CompatibilityMode
-                ? "全部配置已保存；运行中的网关需重启后应用。"
-                : "Codex 配置已保存。";
+            GatewayStatus = IsGatewayRunning
+                ? "全部配置已保存；网关服务已重启并应用新配置。"
+                : "全部配置已保存。";
             CodexStatus = $"Codex 配置已保存；已保存配置：{backup}{(authResult.PlaceholderCreated ? "；已创建 auth.json 安全占位 Key" : string.Empty)}。";
         }
         catch (Exception exception)
@@ -340,9 +350,9 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             await _launcher.CloseManagedClientsAsync();
             await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
-            await _gatewayHost.StartAsync(CurrentGatewaySettings());
+            await _gatewayServiceManager.StartAsync();
             IsGatewayRunning = true;
-            GatewayStatus = $"监听 http://{LocalBindIp}:{ListenPort}，上游 {UpstreamBaseUrl}";
+            GatewayStatus = $"Windows 服务已启动：监听 http://{LocalBindIp}:{ListenPort}";
         }
         catch (Exception exception)
         {
@@ -355,14 +365,70 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         try
         {
-            await _gatewayHost.StopAsync();
+            await _gatewayServiceManager.StopAsync();
             IsGatewayRunning = false;
-            GatewayStatus = "网关已停止。";
+            GatewayStatus = "Windows 服务已停止。";
         }
         catch (Exception exception)
         {
             LogError("停止网关", exception);
             GatewayStatus = $"停止失败：{exception.Message}";
+        }
+    }
+
+    private async Task InstallGatewayServiceAsync()
+    {
+        try
+        {
+            await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
+            await _gatewayServiceManager.InstallAsync();
+            GatewayStatus = "Windows 服务已安装，已设为随系统自动启动。";
+            await RefreshGatewayStatusAsync();
+        }
+        catch (Exception exception)
+        {
+            LogError("安装网关服务", exception);
+            GatewayStatus = $"安装服务失败：{exception.Message}";
+        }
+    }
+
+    private async Task UninstallGatewayServiceAsync()
+    {
+        try
+        {
+            await _gatewayServiceManager.UninstallAsync();
+            IsGatewayRunning = false;
+            GatewayStatus = "Windows 服务已卸载。";
+        }
+        catch (Exception exception)
+        {
+            LogError("卸载网关服务", exception);
+            GatewayStatus = $"卸载服务失败：{exception.Message}";
+        }
+    }
+
+    private async Task RefreshGatewayStatusAsync()
+    {
+        try
+        {
+            var status = await _gatewayServiceManager.GetStatusAsync();
+            IsGatewayRunning = status.Contains("运行中", StringComparison.Ordinal);
+            GatewayStatus = status;
+        }
+        catch (Exception exception)
+        {
+            LogError("读取网关服务状态", exception);
+            GatewayStatus = $"无法读取服务状态：{exception.Message}";
+        }
+    }
+
+    private async Task RestartGatewayIfRunningAsync()
+    {
+        var status = await _gatewayServiceManager.GetStatusAsync();
+        IsGatewayRunning = status.Contains("运行中", StringComparison.Ordinal);
+        if (IsGatewayRunning)
+        {
+            await _gatewayServiceManager.RestartAsync();
         }
     }
 
@@ -613,8 +679,11 @@ public sealed class MainWindowViewModel : ObservableObject
         ListenPort = ListenPort,
         UpstreamBaseUrl = EndpointNormalizer.Normalize(UpstreamBaseUrl),
         CompatibilityMode = CompatibilityMode,
+        ResponsesMode = ResponsesMode,
+        GeminiImageApiKey = GeminiImageApiKey.Trim(),
         DirectCodexBaseUrl = EndpointNormalizer.Normalize(CodexBaseUrl),
         LogTraffic = LogTraffic,
+        EndpointMappings = new Dictionary<string, string>(_endpointMappings, StringComparer.OrdinalIgnoreCase),
         ExtraRequestHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["Accept-Language"] = "zh-CN,zh;q=0.9,en;q=0.8"
@@ -634,6 +703,9 @@ public sealed class MainWindowViewModel : ObservableObject
         LocalBindIp = settings.LocalBindIp;
         ListenPort = settings.ListenPort;
         UpstreamBaseUrl = EndpointNormalizer.Normalize(settings.UpstreamBaseUrl);
+        ResponsesMode = settings.ResponsesMode;
+        GeminiImageApiKey = settings.GeminiImageApiKey;
+        _endpointMappings = new Dictionary<string, string>(settings.EndpointMappings, StringComparer.OrdinalIgnoreCase);
         CompatibilityMode = false;
         if (!string.IsNullOrWhiteSpace(settings.DirectCodexBaseUrl))
         {

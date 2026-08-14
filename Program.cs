@@ -3,6 +3,11 @@ using Yarp.ReverseProxy.Forwarder;
 using Yarp.ReverseProxy.Transforms;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseContentRoot(AppContext.BaseDirectory);
+if (args.Contains("--service", StringComparer.OrdinalIgnoreCase))
+{
+    builder.Host.UseWindowsService();
+}
 
 // 读取 Gateway 配置。
 var gateway = builder.Configuration.GetSection("Gateway");
@@ -11,6 +16,8 @@ var upstreamBaseUrl = string.IsNullOrWhiteSpace(rawUpstream)
     ? "https://api.openai.com/"
     : rawUpstream.TrimEnd('/') + "/";
 var logTraffic = gateway.GetValue("LogTraffic", true);
+var responsesMode = gateway["ResponsesMode"] ?? "Auto";
+var geminiImageApiKey = gateway["GeminiImageApiKey"]?.Trim();
 var localBindIp = gateway["LocalBindIp"] ?? "127.0.0.1";
 var listenPort = gateway.GetValue("ListenPort", 3001);
 var listenUrl = $"http://{(localBindIp.Contains(':') ? $"[{localBindIp}]" : localBindIp)}:{listenPort}";
@@ -30,6 +37,11 @@ foreach (var child in extraSection.GetChildren())
         extraHeaders[child.Key] = child.Value!;
     }
 }
+
+var endpointMappings = gateway.GetSection("EndpointMappings")
+    .GetChildren()
+    .Where(child => !string.IsNullOrWhiteSpace(child.Value))
+    .ToDictionary(child => child.Key, child => child.Value!, StringComparer.OrdinalIgnoreCase);
 
 // 用代码动态构建 YARP 路由/集群：上游地址以 Gateway:UpstreamBaseUrl 为准
 var routes = new[]
@@ -82,6 +94,21 @@ builder.Services
             // 去掉可能干扰上游的转发头
             headers.Remove("X-Forwarded-Host");
 
+            var mappedPath = EndpointMapper.MapPath(transformContext.HttpContext.Request.Path, endpointMappings);
+            if (!string.Equals(mappedPath, transformContext.HttpContext.Request.Path, StringComparison.Ordinal))
+            {
+                var original = transformContext.ProxyRequest.RequestUri!;
+                transformContext.ProxyRequest.RequestUri = new UriBuilder(original) { Path = mappedPath }.Uri;
+            }
+
+            if (!string.IsNullOrWhiteSpace(geminiImageApiKey)
+                && EndpointMapper.MatchesPath(transformContext.HttpContext.Request.Path, "/v1beta"))
+            {
+                headers.Remove("Authorization");
+                headers.Remove("x-goog-api-key");
+                headers.TryAddWithoutValidation("x-goog-api-key", geminiImageApiKey);
+            }
+
             if (logTraffic)
             {
                 var request = transformContext.HttpContext.Request;
@@ -121,7 +148,7 @@ app.MapGet("/", () => Results.Json(new
     usage = new
     {
         tip = $"把客户端 base_url 指到本机监听地址，例如 {listenUrl}/v1",
-        config = "修改同目录 appsettings.json 中 Gateway 配置后重启 exe"
+        config = "修改同目录 appsettings.json 中 Gateway 配置后重启服务"
     }
 }));
 
@@ -134,7 +161,8 @@ app.MapPost("/v1/responses", async (HttpContext context, IHttpClientFactory http
         httpClientFactory,
         upstreamBaseUrl,
         extraHeaders,
-        logTraffic);
+        logTraffic,
+        responsesMode);
 });
 
 app.MapReverseProxy(proxyPipeline =>
@@ -147,6 +175,7 @@ app.MapReverseProxy(proxyPipeline =>
 
 Console.WriteLine("========================================");
 Console.WriteLine("  LlmGateway - 本机 LLM 反向代理");
+Console.WriteLine($"  模式: {(args.Contains("--service", StringComparer.OrdinalIgnoreCase) ? "Windows 服务" : "控制台")}");
 Console.WriteLine($"  监听: {listenUrl}");
 Console.WriteLine($"  上游: {upstreamBaseUrl}");
 Console.WriteLine($"  流量日志: {(logTraffic ? "开启" : "关闭")}");

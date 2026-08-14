@@ -6,10 +6,19 @@ public sealed class GatewaySettings
     public int ListenPort { get; set; } = 23001;
     public string UpstreamBaseUrl { get; set; } = "https://api.ailili.chat";
     public bool CompatibilityMode { get; set; }
+    public string ResponsesMode { get; set; } = "Auto";
+    public string GeminiImageApiKey { get; set; } = string.Empty;
     public string DirectCodexBaseUrl { get; set; } = "https://api.ailili.chat/v1";
     public Dictionary<string, string> ExtraRequestHeaders { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Accept-Language"] = "zh-CN,zh;q=0.9,en;q=0.8"
+    };
+    public Dictionary<string, string> EndpointMappings { get; set; } = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["/v1/images/generations"] = "/v1/images/generations",
+        ["/v1/images/edits"] = "/v1/images/edits",
+        ["/v1beta"] = "/v1beta",
+        ["/v1/gemini-openai"] = "/v1beta/openai"
     };
     public bool LogTraffic { get; set; }
 
@@ -19,8 +28,11 @@ public sealed class GatewaySettings
         ListenPort = ListenPort,
         UpstreamBaseUrl = UpstreamBaseUrl,
         CompatibilityMode = CompatibilityMode,
+        ResponsesMode = ResponsesMode,
+        GeminiImageApiKey = GeminiImageApiKey,
         DirectCodexBaseUrl = DirectCodexBaseUrl,
         ExtraRequestHeaders = new Dictionary<string, string>(ExtraRequestHeaders, StringComparer.OrdinalIgnoreCase),
+        EndpointMappings = new Dictionary<string, string>(EndpointMappings, StringComparer.OrdinalIgnoreCase),
         LogTraffic = LogTraffic
     };
 }
