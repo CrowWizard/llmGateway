@@ -488,6 +488,8 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             await _gatewayServiceManager.UninstallAsync();
             IsGatewayRunning = false;
+            IsServiceInstalled = false;
+            IsServiceAutomaticStart = false;
             GatewayStatus = "Windows 服务已卸载。";
         }
         catch (Exception exception)
