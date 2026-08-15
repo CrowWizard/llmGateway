@@ -67,7 +67,7 @@
                         <TextBox Text="{Binding BaseUrl}" PlaceholderText="https://api.ailili.chat/v1" />
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                           <TextBox Text="{Binding ApiKey}" PasswordChar="●" RevealPassword="{Binding $parent[Window].DataContext.IsApiKeyVisible}" PlaceholderText="API Key" />
-                          <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[Window].DataContext.Models}" SelectedItem="{Binding Model}" IsEditable="True" PlaceholderText="模型" />
+                          <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[Window].DataContext.Models}" Text="{Binding Model, Mode=TwoWay}" IsEditable="True" PlaceholderText="模型" />
                         </Grid>
                       </StackPanel>
                     </Border>
@@ -100,7 +100,7 @@
                         <TextBox Text="{Binding BaseUrl}" PlaceholderText="https://api.ailili.chat/v1" />
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                           <TextBox Text="{Binding ApiKey}" PasswordChar="●" RevealPassword="{Binding $parent[Window].DataContext.IsApiKeyVisible}" PlaceholderText="API Key" />
-                          <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[Window].DataContext.ImageModels}" SelectedItem="{Binding Model}" IsEditable="True" PlaceholderText="生图模型" />
+                          <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[Window].DataContext.ImageModels}" Text="{Binding Model, Mode=TwoWay}" IsEditable="True" PlaceholderText="生图模型" />
                         </Grid>
                       </StackPanel>
                     </Border>

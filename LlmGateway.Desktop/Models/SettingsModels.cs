@@ -57,6 +57,8 @@ public sealed class GatewaySettings
     };
     public List<ModelGroupSettings> TextModelGroups { get; set; } = [];
     public List<ModelGroupSettings> ImageModelGroups { get; set; } = [];
+    public List<string> TextModels { get; set; } = [];
+    public List<string> ImageModels { get; set; } = [];
     public List<GatewayEndpointSettings> Endpoints { get; set; } = [];
     public bool LogTraffic { get; set; }
     public string TrafficLogDirectory { get; set; } = string.Empty;
@@ -75,6 +77,8 @@ public sealed class GatewaySettings
         EndpointMappings = new Dictionary<string, string>(EndpointMappings, StringComparer.OrdinalIgnoreCase),
         TextModelGroups = TextModelGroups.Select(group => group.Clone()).ToList(),
         ImageModelGroups = ImageModelGroups.Select(group => group.Clone()).ToList(),
+        TextModels = TextModels.ToList(),
+        ImageModels = ImageModels.ToList(),
         Endpoints = Endpoints.Select(endpoint => new GatewayEndpointSettings
         {
             Name = endpoint.Name,

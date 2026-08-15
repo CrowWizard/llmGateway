@@ -568,6 +568,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 Models.Add(item);
             }
             group.Model = models.Contains(previous, StringComparer.Ordinal) ? previous : models[0];
+            await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
             CodexStatus = $"令牌验证通过，已获取 {models.Count} 个模型。";
         }
         catch (Exception exception)
@@ -595,6 +596,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 : models.Contains("gpt-image-2", StringComparer.Ordinal)
                     ? "gpt-image-2"
                     : models[0];
+            await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
             ImageGenerationStatus = $"已获取 {models.Count} 个模型，已默认选择：{group.Model}。";
         }
         catch (Exception exception)
@@ -837,6 +839,8 @@ public sealed class MainWindowViewModel : ObservableObject
         EndpointMappings = new Dictionary<string, string>(_endpointMappings, StringComparer.OrdinalIgnoreCase),
         TextModelGroups = TextModelGroups.Select(group => group.Clone()).ToList(),
         ImageModelGroups = ImageModelGroups.Select(group => group.Clone()).ToList(),
+        TextModels = Models.ToList(),
+        ImageModels = ImageModels.ToList(),
         Endpoints = CurrentEndpoints(),
         TrafficLogDirectory = _paths.CodexLogDirectory,
         ExtraRequestHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -890,8 +894,8 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             primaryTextGroup.Model = Model;
         }
-        RestoreSavedModels(Models, TextModelGroups);
-        RestoreSavedModels(ImageModels, ImageModelGroups);
+        RestoreModels(Models, settings.TextModels, TextModelGroups);
+        RestoreModels(ImageModels, settings.ImageModels, ImageModelGroups);
         UpstreamBaseUrl = EndpointNormalizer.Normalize(primaryTextGroup.BaseUrl);
         ApplyEndpointIdentity(UpstreamBaseUrl);
         ResponsesMode = settings.ResponsesMode;
@@ -972,10 +976,15 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    private static void RestoreSavedModels(ObservableCollection<string> destination, IEnumerable<ModelGroupSettings> groups)
+    private static void RestoreModels(
+        ObservableCollection<string> destination,
+        IEnumerable<string> savedModels,
+        IEnumerable<ModelGroupSettings> groups)
     {
-        foreach (var model in groups
-                     .Select(group => group.Model.Trim())
+        destination.Clear();
+        foreach (var model in savedModels
+                     .Concat(groups.Select(group => group.Model))
+                     .Select(model => model.Trim())
                      .Where(model => !string.IsNullOrWhiteSpace(model))
                      .Distinct(StringComparer.Ordinal))
         {
