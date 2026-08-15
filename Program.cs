@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -73,6 +74,7 @@ var endpointMappings = gateway.GetSection("EndpointMappings")
 
 
 var app = builder.Build();
+app.UseWebSockets();
 
 // 健康检查 / 说明页
 app.MapGet("/", () => Results.Json(new
@@ -127,7 +129,21 @@ app.MapPost("/v1/responses", async (HttpContext context, IHttpClientFactory http
     }
     return Results.Empty;
 });
-app.MapMethods("/v1/responses", ["GET", "PUT", "PATCH", "DELETE"], async context =>
+app.MapGet("/v1/responses", async (HttpContext context, IHttpClientFactory httpClientFactory, ModelRegistry registry) =>
+{
+    if (context.WebSockets.IsWebSocketRequest)
+    {
+        await ResponsesWebSocketCompatibility.HandleAsync(context, httpClientFactory, registry, extraHeaders, logTraffic, responsesMode);
+        return;
+    }
+
+    const string responseBody = "{\"error\":{\"message\":\"仅支持 POST /v1/responses。\",\"type\":\"invalid_request_error\"}}";
+    await UnsupportedResponsesRequestLog.WriteAsync(context, StatusCodes.Status405MethodNotAllowed, responseBody);
+    context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
+    context.Response.ContentType = "application/json; charset=utf-8";
+    await context.Response.WriteAsync(responseBody, context.RequestAborted);
+});
+app.MapMethods("/v1/responses", ["PUT", "PATCH", "DELETE"], async context =>
 {
     const string responseBody = "{\"error\":{\"message\":\"仅支持 POST /v1/responses。\",\"type\":\"invalid_request_error\"}}";
     await UnsupportedResponsesRequestLog.WriteAsync(context, StatusCodes.Status405MethodNotAllowed, responseBody);
