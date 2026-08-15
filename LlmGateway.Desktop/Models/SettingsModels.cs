@@ -44,6 +44,7 @@ public sealed class GatewaySettings
     public string UpstreamBaseUrl { get; set; } = "https://api.ailili.chat";
     public bool CompatibilityMode { get; set; }
     public string ResponsesMode { get; set; } = "Auto";
+    public string LogLevel { get; set; } = "Error";
     public string GeminiImageApiKey { get; set; } = string.Empty;
     public string DirectCodexBaseUrl { get; set; } = "https://api.ailili.chat";
     public Dictionary<string, string> ExtraRequestHeaders { get; set; } = new(StringComparer.OrdinalIgnoreCase)
@@ -71,6 +72,7 @@ public sealed class GatewaySettings
         UpstreamBaseUrl = UpstreamBaseUrl,
         CompatibilityMode = CompatibilityMode,
         ResponsesMode = ResponsesMode,
+        LogLevel = LogLevel,
         GeminiImageApiKey = GeminiImageApiKey,
         DirectCodexBaseUrl = DirectCodexBaseUrl,
         ExtraRequestHeaders = new Dictionary<string, string>(ExtraRequestHeaders, StringComparer.OrdinalIgnoreCase),

@@ -143,8 +143,22 @@ public sealed class EndpointForwarder(IHttpClientFactory httpClientFactory, Mode
         || name.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase)
         || name.Equals("x-goog-api-key", StringComparison.OrdinalIgnoreCase)
         || name.Equals("x-api-key", StringComparison.OrdinalIgnoreCase)
-            ? "[redacted]"
+            ? MaskSecret(string.Join(", ", values))
             : string.Join(", ", values);
+
+    private static string MaskSecret(string value)
+    {
+        const int visibleLength = 6;
+        const string bearerPrefix = "Bearer ";
+        if (value.StartsWith(bearerPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return bearerPrefix + MaskSecret(value[bearerPrefix.Length..]);
+        }
+
+        return value.Length <= visibleLength * 2
+            ? "[redacted]"
+            : $"{value[..visibleLength]}...{value[^visibleLength..]}";
+    }
 
     private static async Task<byte[]> ReadBodyAsync(HttpRequest request, CancellationToken cancellationToken)
     {

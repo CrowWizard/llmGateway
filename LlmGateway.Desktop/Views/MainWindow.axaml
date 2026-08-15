@@ -153,6 +153,14 @@
                 </StackPanel>
                 <CheckBox Grid.Column="1" IsChecked="{Binding LogTraffic}" Content="记录代理流量" VerticalAlignment="Bottom" />
               </Grid>
+              <StackPanel Spacing="6">
+                <TextBlock Classes="caption" Text="日志级别" />
+                <ComboBox SelectedItem="{Binding LogLevel}">
+                  <x:String>Error</x:String>
+                  <x:String>Information</x:String>
+                  <x:String>Debug</x:String>
+                </ComboBox>
+              </StackPanel>
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                   <StackPanel Spacing="6">
                     <TextBlock Classes="caption" Text="本地 Gateway API Key" />

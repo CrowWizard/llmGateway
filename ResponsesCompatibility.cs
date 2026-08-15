@@ -44,7 +44,7 @@ static class ResponsesCompatibility
             {
                 var nativeStartedAt = Stopwatch.GetTimestamp();
                 LogRequest(context, upstream, "/v1/responses", request, logTraffic, "原生 Responses");
-                nativeResponse = await SendAsync(context, httpClientFactory, request, upstream, extraHeaders, "/v1/responses");
+                nativeResponse = await SendAsync(context, httpClientFactory, request, upstream, extraHeaders, "/v1/responses", logTraffic);
                 LogResponse(context, upstream, nativeResponse, nativeStartedAt, logTraffic, "原生 Responses");
             }
             catch (TimeoutException exception)
@@ -194,8 +194,22 @@ static class ResponsesCompatibility
         || name.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase)
         || name.Equals("x-goog-api-key", StringComparison.OrdinalIgnoreCase)
         || name.Equals("x-api-key", StringComparison.OrdinalIgnoreCase)
-            ? "[redacted]"
+            ? MaskSecret(string.Join(", ", values))
             : string.Join(", ", values);
+
+    private static string MaskSecret(string value)
+    {
+        const int visibleLength = 6;
+        const string bearerPrefix = "Bearer ";
+        if (value.StartsWith(bearerPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return bearerPrefix + MaskSecret(value[bearerPrefix.Length..]);
+        }
+
+        return value.Length <= visibleLength * 2
+            ? "[redacted]"
+            : $"{value[..visibleLength]}...{value[^visibleLength..]}";
+    }
 
     private static async Task<HttpResponseMessage> SendAsync(
         HttpContext context,
@@ -203,9 +217,15 @@ static class ResponsesCompatibility
         JsonObject body,
         GatewayEndpoint upstream,
         IReadOnlyDictionary<string, string> extraHeaders,
-        string endpoint)
+        string endpoint,
+        bool logTraffic)
     {
         using var request = CreateUpstreamRequest(context, body, upstream, extraHeaders, endpoint);
+        if (logTraffic)
+        {
+            Console.WriteLine($"[{context.TraceIdentifier}] [发往上游头] {FormatHeaders(request.Headers, request.Content?.Headers)}");
+        }
+
         try
         {
             return await httpClientFactory.CreateClient("responses-compatibility").SendAsync(

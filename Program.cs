@@ -14,8 +14,12 @@ if (args.Contains("--service", StringComparer.OrdinalIgnoreCase))
 
 // 读取 Gateway 配置。
 var gateway = builder.Configuration.GetSection("Gateway");
-var logTraffic = gateway.GetValue("LogTraffic", true);
+var gatewayLogLevel = GatewayLogLevels.Parse(gateway["LogLevel"]);
+builder.Logging.SetMinimumLevel(gatewayLogLevel.ToMicrosoftLogLevel());
+builder.Logging.AddFilter((_, level) => level >= gatewayLogLevel.ToMicrosoftLogLevel());
+var logTraffic = gateway.GetValue("LogTraffic", true) && gatewayLogLevel == GatewayLogLevel.Debug;
 GatewayTrafficFileLog.Configure(logTraffic, gateway["TrafficLogDirectory"]);
+UnsupportedResponsesRequestLog.Configure(gateway["TrafficLogDirectory"]);
 var responsesMode = gateway["ResponsesMode"] ?? "Auto";
 var gatewayApiKey = gateway["ApiKey"]?.Trim();
 if (string.IsNullOrWhiteSpace(gatewayApiKey))
@@ -123,6 +127,14 @@ app.MapPost("/v1/responses", async (HttpContext context, IHttpClientFactory http
     }
     return Results.Empty;
 });
+app.MapMethods("/v1/responses", ["GET", "PUT", "PATCH", "DELETE"], async context =>
+{
+    const string responseBody = "{\"error\":{\"message\":\"仅支持 POST /v1/responses。\",\"type\":\"invalid_request_error\"}}";
+    await UnsupportedResponsesRequestLog.WriteAsync(context, StatusCodes.Status405MethodNotAllowed, responseBody);
+    context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
+    context.Response.ContentType = "application/json; charset=utf-8";
+    await context.Response.WriteAsync(responseBody, context.RequestAborted);
+});
 app.MapMethods("/v1/{**path}", ["GET", "POST", "PUT", "PATCH", "DELETE"], async (HttpContext context, EndpointForwarder forwarder) =>
 {
     await forwarder.ForwardAsync(context, extraHeaders, endpointMappings, logTraffic, context.RequestAborted);
@@ -133,7 +145,8 @@ Console.WriteLine("  LlmGateway - 本机 LLM 反向代理");
 Console.WriteLine($"  模式: {(args.Contains("--service", StringComparer.OrdinalIgnoreCase) ? "Windows 服务" : "控制台")}");
 Console.WriteLine($"  监听: {listenUrl}");
 Console.WriteLine($"  Endpoint: {string.Join(", ", app.Services.GetRequiredService<ModelRegistry>().Endpoints.Select(endpoint => endpoint.Name))}");
-Console.WriteLine($"  流量日志: {(logTraffic ? "开启" : "关闭")}");
+Console.WriteLine($"  日志级别: {gatewayLogLevel}");
+Console.WriteLine($"  流量详情: {(logTraffic ? "开启" : "仅 Debug 级别记录")}");
 Console.WriteLine("  改配置: 同目录 appsettings.json -> 重启");
 Console.WriteLine("========================================");
 
@@ -257,8 +270,22 @@ static class TrafficLogging
         || name.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase)
         || name.Equals("x-goog-api-key", StringComparison.OrdinalIgnoreCase)
         || name.Equals("x-api-key", StringComparison.OrdinalIgnoreCase)
-            ? "[redacted]"
+            ? MaskSecret(string.Join(", ", values))
             : string.Join(", ", values);
+
+    private static string MaskSecret(string value)
+    {
+        const int visibleLength = 6;
+        const string bearerPrefix = "Bearer ";
+        if (value.StartsWith(bearerPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return bearerPrefix + MaskSecret(value[bearerPrefix.Length..]);
+        }
+
+        return value.Length <= visibleLength * 2
+            ? "[redacted]"
+            : $"{value[..visibleLength]}...{value[^visibleLength..]}";
+    }
 
     private sealed class LoggingResponseStream(Stream inner, string requestId) : Stream
     {
@@ -323,6 +350,63 @@ static class GatewayTrafficFileLog
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "gateway-traffic.log");
         Console.SetOut(new TeeTextWriter(Console.Out, path));
+    }
+}
+
+static class UnsupportedResponsesRequestLog
+{
+    private static readonly object Sync = new();
+    private static string? _path;
+
+    public static void Configure(string? configuredDirectory)
+    {
+        var directory = string.IsNullOrWhiteSpace(configuredDirectory)
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".codex",
+                "logs")
+            : configuredDirectory;
+        Directory.CreateDirectory(directory);
+        _path = Path.Combine(directory, "unsupported-responses-requests.log");
+    }
+
+    public static async Task WriteAsync(HttpContext context, int statusCode, string responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(_path))
+        {
+            return;
+        }
+
+        context.Request.EnableBuffering();
+        string requestBody;
+        using (var reader = new StreamReader(
+                   context.Request.Body,
+                   Encoding.UTF8,
+                   detectEncodingFromByteOrderMarks: true,
+                   leaveOpen: true))
+        {
+            requestBody = await reader.ReadToEndAsync(context.RequestAborted);
+            context.Request.Body.Position = 0;
+        }
+
+        var requestUrl = $"{context.Request.Scheme}://{context.Request.Host}{context.Request.PathBase}{context.Request.Path}{context.Request.QueryString}";
+        var entry = new StringBuilder()
+            .AppendLine("========================================")
+            .AppendLine($"时间: {DateTimeOffset.Now:O}")
+            .AppendLine($"请求 ID: {context.TraceIdentifier}")
+            .AppendLine($"请求方法: {context.Request.Method}")
+            .AppendLine($"请求 URL: {requestUrl}")
+            .AppendLine($"请求协议: {context.Request.Protocol}")
+            .AppendLine($"请求头: {TrafficLogging.FormatHeaders(context.Request.Headers)}")
+            .AppendLine($"请求体: {(string.IsNullOrEmpty(requestBody) ? "<空>" : requestBody)}")
+            .AppendLine($"返回状态: HTTP {statusCode}")
+            .AppendLine("返回头: Content-Type: application/json; charset=utf-8")
+            .AppendLine($"返回体: {responseBody}");
+
+        lock (Sync)
+        {
+            File.AppendAllText(_path, entry.ToString(), Encoding.UTF8);
+        }
     }
 }
 

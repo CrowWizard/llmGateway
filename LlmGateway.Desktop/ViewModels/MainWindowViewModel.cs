@@ -34,6 +34,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private int _listenPort = 23001;
     private string _upstreamBaseUrl = string.Empty;
     private string _responsesMode = "Auto";
+    private string _logLevel = "Error";
     private string _geminiImageApiKey = string.Empty;
     private string _gatewayApiKey = string.Empty;
     private Dictionary<string, string> _endpointMappings = new(StringComparer.OrdinalIgnoreCase);
@@ -196,6 +197,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
     public string ResponsesMode { get => _responsesMode; set => SetProperty(ref _responsesMode, value); }
+    public string LogLevel { get => _logLevel; set => SetProperty(ref _logLevel, value); }
     public string GeminiImageApiKey { get => _geminiImageApiKey; set => SetProperty(ref _geminiImageApiKey, value); }
     public string GatewayApiKey { get => _gatewayApiKey; set => SetProperty(ref _gatewayApiKey, value); }
     public bool CompatibilityMode
@@ -833,6 +835,7 @@ public sealed class MainWindowViewModel : ObservableObject
         UpstreamBaseUrl = EndpointNormalizer.Normalize(UpstreamBaseUrl),
         CompatibilityMode = CompatibilityMode,
         ResponsesMode = ResponsesMode,
+        LogLevel = LogLevel,
         GeminiImageApiKey = GeminiImageApiKey.Trim(),
         DirectCodexBaseUrl = EndpointNormalizer.Normalize(CodexBaseUrl),
         LogTraffic = LogTraffic,
@@ -899,6 +902,7 @@ public sealed class MainWindowViewModel : ObservableObject
         UpstreamBaseUrl = EndpointNormalizer.Normalize(primaryTextGroup.BaseUrl);
         ApplyEndpointIdentity(UpstreamBaseUrl);
         ResponsesMode = settings.ResponsesMode;
+        LogLevel = settings.LogLevel;
         GeminiImageApiKey = settings.GeminiImageApiKey;
         _endpointMappings = new Dictionary<string, string>(settings.EndpointMappings, StringComparer.OrdinalIgnoreCase);
         CompatibilityMode = false;
