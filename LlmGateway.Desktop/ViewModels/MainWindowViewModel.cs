@@ -33,7 +33,9 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _upstreamBaseUrl = string.Empty;
     private string _responsesMode = "Auto";
     private string _geminiImageApiKey = string.Empty;
+    private string _gatewayApiKey = string.Empty;
     private Dictionary<string, string> _endpointMappings = new(StringComparer.OrdinalIgnoreCase);
+    private List<GatewayEndpointSettings> _endpoints = [];
     private bool _compatibilityMode;
     private bool _logTraffic;
     private bool _isGatewayRunning;
@@ -170,6 +172,7 @@ public sealed class MainWindowViewModel : ObservableObject
     }
     public string ResponsesMode { get => _responsesMode; set => SetProperty(ref _responsesMode, value); }
     public string GeminiImageApiKey { get => _geminiImageApiKey; set => SetProperty(ref _geminiImageApiKey, value); }
+    public string GatewayApiKey { get => _gatewayApiKey; set => SetProperty(ref _gatewayApiKey, value); }
     public bool CompatibilityMode
     {
         get => _compatibilityMode;
@@ -310,9 +313,9 @@ public sealed class MainWindowViewModel : ObservableObject
             await RestartGatewayIfRunningAsync();
             await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
             await _environmentService.SaveAsync("OPENAI_BASE_URL", LocalGatewayBaseUrl);
+            await _environmentService.SaveAsync("OPENAI_API_KEY", GatewayApiKey);
             if (saveImageConfiguration)
             {
-                await _environmentService.SaveAsync("OPENAI_API_KEY", ImageApiKey);
                 await _environmentService.SaveAsync("OPENAI_IMAGE_MODEL", ImageModel.Trim());
             }
             await _codexConfig.SaveAsync(CurrentCodexSettings());
@@ -346,6 +349,7 @@ public sealed class MainWindowViewModel : ObservableObject
             ApplyEndpointIdentity(UpstreamBaseUrl);
             await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
             await _environmentService.SaveAsync("OPENAI_BASE_URL", LocalGatewayBaseUrl);
+            await _environmentService.SaveAsync("OPENAI_API_KEY", GatewayApiKey);
             await _codexConfig.SaveAsync(CurrentCodexSettings());
             await _gatewayServiceManager.StartAsync();
             IsGatewayRunning = true;
@@ -439,7 +443,9 @@ public sealed class MainWindowViewModel : ObservableObject
         try
         {
             ApplyEndpointIdentity(UpstreamBaseUrl);
+            await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
             await _environmentService.SaveAsync("OPENAI_BASE_URL", LocalGatewayBaseUrl);
+            await _environmentService.SaveAsync("OPENAI_API_KEY", GatewayApiKey);
             await _codexConfig.SaveAsync(CurrentCodexSettings());
         }
         catch (Exception exception)
@@ -454,7 +460,7 @@ public sealed class MainWindowViewModel : ObservableObject
         try
         {
             CodexStatus = "正在验证令牌并获取模型…";
-            var models = await _modelService.FetchAsync(EffectiveCodexBaseUrl, ApiKey);
+            var models = await _modelService.FetchAsync(UpstreamBaseUrl, ApiKey);
             var previous = Model;
             Models.Clear();
             foreach (var item in models)
@@ -723,6 +729,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         LocalBindIp = LocalBindIp,
         ListenPort = ListenPort,
+        GatewayApiKey = GatewayApiKey,
         UpstreamBaseUrl = EndpointNormalizer.Normalize(UpstreamBaseUrl),
         CompatibilityMode = CompatibilityMode,
         ResponsesMode = ResponsesMode,
@@ -730,6 +737,7 @@ public sealed class MainWindowViewModel : ObservableObject
         DirectCodexBaseUrl = EndpointNormalizer.Normalize(CodexBaseUrl),
         LogTraffic = LogTraffic,
         EndpointMappings = new Dictionary<string, string>(_endpointMappings, StringComparer.OrdinalIgnoreCase),
+        Endpoints = CurrentEndpoints(),
         ExtraRequestHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["Accept-Language"] = "zh-CN,zh;q=0.9,en;q=0.8"
@@ -748,17 +756,43 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         LocalBindIp = settings.LocalBindIp;
         ListenPort = settings.ListenPort;
+        GatewayApiKey = string.IsNullOrWhiteSpace(settings.GatewayApiKey)
+            ? GatewayEndpoint.CreateGatewayApiKey()
+            : settings.GatewayApiKey;
         UpstreamBaseUrl = EndpointNormalizer.Normalize(settings.UpstreamBaseUrl);
         ApplyEndpointIdentity(UpstreamBaseUrl);
         ResponsesMode = settings.ResponsesMode;
         GeminiImageApiKey = settings.GeminiImageApiKey;
         _endpointMappings = new Dictionary<string, string>(settings.EndpointMappings, StringComparer.OrdinalIgnoreCase);
+        _endpoints = settings.Endpoints;
         CompatibilityMode = false;
         if (!string.IsNullOrWhiteSpace(settings.DirectCodexBaseUrl))
         {
             CodexBaseUrl = EndpointNormalizer.Normalize(settings.DirectCodexBaseUrl);
         }
         LogTraffic = settings.LogTraffic;
+    }
+
+    private List<GatewayEndpointSettings> CurrentEndpoints()
+    {
+        var defaultName = EndpointNormalizer.GetConfigurationName(UpstreamBaseUrl);
+        var primary = new GatewayEndpointSettings
+        {
+            Name = string.IsNullOrWhiteSpace(defaultName) ? "default" : defaultName,
+            BaseUrl = EndpointNormalizer.Normalize(UpstreamBaseUrl),
+            ApiKey = ApiKey.Trim(),
+            Enabled = true
+        };
+        var additional = _endpoints
+            .Where(endpoint => !string.Equals(endpoint.Name, primary.Name, StringComparison.OrdinalIgnoreCase))
+            .Select(endpoint => new GatewayEndpointSettings
+            {
+                Name = endpoint.Name,
+                BaseUrl = endpoint.BaseUrl,
+                ApiKey = endpoint.ApiKey,
+                Enabled = endpoint.Enabled
+            });
+        return [primary, .. additional];
     }
 
     private void ApplyCodex(CodexSettings settings)

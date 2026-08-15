@@ -1,10 +1,8 @@
-using Yarp.ReverseProxy.Configuration;
-using Yarp.ReverseProxy.Forwarder;
-using Yarp.ReverseProxy.Transforms;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Net.Http.Headers;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseContentRoot(AppContext.BaseDirectory);
@@ -15,13 +13,14 @@ if (args.Contains("--service", StringComparer.OrdinalIgnoreCase))
 
 // 读取 Gateway 配置。
 var gateway = builder.Configuration.GetSection("Gateway");
-var rawUpstream = gateway["UpstreamBaseUrl"];
-var upstreamBaseUrl = string.IsNullOrWhiteSpace(rawUpstream)
-    ? "https://api.openai.com/"
-    : rawUpstream.TrimEnd('/') + "/";
 var logTraffic = gateway.GetValue("LogTraffic", true);
 var responsesMode = gateway["ResponsesMode"] ?? "Auto";
-var geminiImageApiKey = gateway["GeminiImageApiKey"]?.Trim();
+var gatewayApiKey = gateway["ApiKey"]?.Trim();
+if (string.IsNullOrWhiteSpace(gatewayApiKey))
+{
+    gatewayApiKey = GatewayEndpoint.CreateGatewayApiKey();
+    PersistGatewayApiKey(gatewayApiKey);
+}
 var localBindIp = gateway["LocalBindIp"] ?? "127.0.0.1";
 var listenPort = gateway.GetValue("ListenPort", 3001);
 var configuredListenPort = listenPort;
@@ -42,10 +41,13 @@ if (listenPort != configuredListenPort)
 
 var listenUrl = $"http://{(localBindIp.Contains(':') ? $"[{localBindIp}]" : localBindIp)}:{listenPort}";
 builder.WebHost.UseUrls(listenUrl);
-builder.Services.AddHttpClient("responses-compatibility", client =>
+builder.Services.AddHttpClient("gateway-upstream", client =>
 {
     client.Timeout = TimeSpan.FromMinutes(10);
 });
+builder.Services.AddSingleton<ModelRegistry>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<ModelRegistry>());
+builder.Services.AddSingleton<EndpointForwarder>();
 
 // 额外请求头
 var extraHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -63,98 +65,6 @@ var endpointMappings = gateway.GetSection("EndpointMappings")
     .Where(child => !string.IsNullOrWhiteSpace(child.Value))
     .ToDictionary(child => child.Key, child => child.Value!, StringComparer.OrdinalIgnoreCase);
 
-// 用代码动态构建 YARP 路由/集群：上游地址以 Gateway:UpstreamBaseUrl 为准
-var routes = new[]
-{
-    new RouteConfig
-    {
-        RouteId = "llm-catch-all",
-        ClusterId = "upstream",
-        Match = new RouteMatch { Path = "{**catch-all}" }
-    }
-};
-
-var clusters = new[]
-{
-    new ClusterConfig
-    {
-        ClusterId = "upstream",
-        HttpRequest = new ForwarderRequestConfig
-        {
-            // LLM 流式响应可能很长
-            ActivityTimeout = TimeSpan.FromMinutes(10)
-        },
-        Destinations = new Dictionary<string, DestinationConfig>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["primary"] = new DestinationConfig { Address = upstreamBaseUrl }
-        }
-    }
-};
-
-builder.Services
-    .AddReverseProxy()
-    .LoadFromMemory(routes, clusters)
-    .AddTransforms(context =>
-    {
-        context.AddRequestTransform(async transformContext =>
-        {
-            var headers = transformContext.ProxyRequest.Headers;
-
-            foreach (var (key, value) in extraHeaders)
-            {
-                if (string.Equals(key, "User-Agent", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                headers.Remove(key);
-                headers.TryAddWithoutValidation(key, value);
-            }
-
-            // 去掉可能干扰上游的转发头
-            headers.Remove("X-Forwarded-Host");
-
-            var mappedPath = EndpointMapper.MapPath(transformContext.HttpContext.Request.Path, endpointMappings);
-            if (!string.Equals(mappedPath, transformContext.HttpContext.Request.Path, StringComparison.Ordinal))
-            {
-                var original = transformContext.ProxyRequest.RequestUri!;
-                transformContext.ProxyRequest.RequestUri = new UriBuilder(original) { Path = mappedPath }.Uri;
-            }
-
-            if (!string.IsNullOrWhiteSpace(geminiImageApiKey)
-                && EndpointMapper.MatchesPath(transformContext.HttpContext.Request.Path, "/v1beta"))
-            {
-                headers.Remove("Authorization");
-                headers.Remove("x-goog-api-key");
-                headers.TryAddWithoutValidation("x-goog-api-key", geminiImageApiKey);
-            }
-
-            if (logTraffic)
-            {
-                var request = transformContext.HttpContext.Request;
-                var requestId = transformContext.HttpContext.TraceIdentifier;
-                var body = transformContext.HttpContext.Items[TrafficLogging.RequestBodyKey] as string ?? "<空>";
-                Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff}] [{requestId}] [发送上游] {request.Method} {upstreamBaseUrl.TrimEnd('/')}{request.Path}{request.QueryString}");
-                Console.WriteLine($"[{requestId}] [发送上游头] {TrafficLogging.FormatHeaders(headers, transformContext.ProxyRequest.Content?.Headers)}");
-                Console.WriteLine($"[{requestId}] [发送上游体] {body}");
-            }
-
-            await ValueTask.CompletedTask;
-        });
-
-        context.AddResponseTransform(transformContext =>
-        {
-            if (logTraffic)
-            {
-                var requestId = transformContext.HttpContext.TraceIdentifier;
-                var response = transformContext.ProxyResponse;
-                Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff}] [{requestId}] [接收上游] HTTP {(int?)response?.StatusCode ?? 0}");
-                Console.WriteLine($"[{requestId}] [接收上游头] {TrafficLogging.FormatHeaders(response?.Headers, response?.Content.Headers)}");
-            }
-
-            return ValueTask.CompletedTask;
-        });
-    });
 
 var app = builder.Build();
 
@@ -164,7 +74,7 @@ app.MapGet("/", () => Results.Json(new
     name = "LlmGateway",
     status = "ok",
     listen = listenUrl,
-    upstream = upstreamBaseUrl,
+    endpoints = app.Services.GetRequiredService<ModelRegistry>().Endpoints.Select(endpoint => endpoint.Name),
     usage = new
     {
         tip = $"把客户端 base_url 指到本机监听地址，例如 {listenUrl}/v1",
@@ -174,30 +84,53 @@ app.MapGet("/", () => Results.Json(new
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 
-app.MapPost("/v1/responses", async (HttpContext context, IHttpClientFactory httpClientFactory) =>
+app.Use(async (context, next) =>
 {
-    await ResponsesCompatibility.HandleAsync(
-        context,
-        httpClientFactory,
-        upstreamBaseUrl,
-        extraHeaders,
-        logTraffic,
-        responsesMode);
+    if (context.Request.Path.StartsWithSegments("/v1")
+        && !HasGatewayApiKey(context.Request.Headers.Authorization, gatewayApiKey))
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        await context.Response.WriteAsJsonAsync(new { error = new { message = "Gateway API Key 无效。", type = "authentication_error" } });
+        return;
+    }
+
+    await next(context);
 });
 
-app.MapReverseProxy(proxyPipeline =>
+if (logTraffic)
 {
-    if (logTraffic)
+    app.Use(TrafficLogging.LogAsync);
+}
+
+app.MapGet("/v1/models", (ModelRegistry registry) => Results.Json(new { @object = "list", data = registry.GetModels() }));
+app.MapPost("/v1/responses", async (HttpContext context, IHttpClientFactory httpClientFactory, ModelRegistry registry) =>
+{
+    using var document = await JsonDocument.ParseAsync(context.Request.Body, cancellationToken: context.RequestAborted);
+    var model = document.RootElement.TryGetProperty("model", out var modelNode) ? modelNode.GetString() : null;
+    context.Request.Body = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(document.RootElement));
+    var endpoint = registry.GetCandidates(model).FirstOrDefault();
+    if (endpoint is null)
     {
-        proxyPipeline.Use(TrafficLogging.LogAsync);
+        return Results.Json(new { error = new { message = "没有可用的上游 Endpoint。", type = "no_upstream" } }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
+
+    await ResponsesCompatibility.HandleAsync(context, httpClientFactory, endpoint, extraHeaders, logTraffic, responsesMode);
+    if (context.Response.StatusCode is >= StatusCodes.Status200OK and < StatusCodes.Status300MultipleChoices)
+    {
+        registry.MarkSuccessful(model, endpoint);
+    }
+    return Results.Empty;
+});
+app.MapMethods("/v1/{**path}", ["GET", "POST", "PUT", "PATCH", "DELETE"], async (HttpContext context, EndpointForwarder forwarder) =>
+{
+    await forwarder.ForwardAsync(context, extraHeaders, endpointMappings, context.RequestAborted);
 });
 
 Console.WriteLine("========================================");
 Console.WriteLine("  LlmGateway - 本机 LLM 反向代理");
 Console.WriteLine($"  模式: {(args.Contains("--service", StringComparer.OrdinalIgnoreCase) ? "Windows 服务" : "控制台")}");
 Console.WriteLine($"  监听: {listenUrl}");
-Console.WriteLine($"  上游: {upstreamBaseUrl}");
+Console.WriteLine($"  Endpoint: {string.Join(", ", app.Services.GetRequiredService<ModelRegistry>().Endpoints.Select(endpoint => endpoint.Name))}");
 Console.WriteLine($"  流量日志: {(logTraffic ? "开启" : "关闭")}");
 Console.WriteLine("  改配置: 同目录 appsettings.json -> 重启");
 Console.WriteLine("========================================");
@@ -238,6 +171,29 @@ static void PersistListenPort(int port)
     gateway["ListenPort"] = port;
     File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
 }
+
+static void PersistGatewayApiKey(string apiKey)
+{
+    var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+    if (!File.Exists(path))
+    {
+        return;
+    }
+
+    var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
+    if (root?["Gateway"] is not JsonObject gateway)
+    {
+        return;
+    }
+
+    gateway["ApiKey"] = apiKey;
+    File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
+}
+
+static bool HasGatewayApiKey(string? authorization, string expectedKey) =>
+    AuthenticationHeaderValue.TryParse(authorization, out var value)
+    && string.Equals(value.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase)
+    && string.Equals(value.Parameter, expectedKey, StringComparison.Ordinal);
 
 static class TrafficLogging
 {
@@ -286,13 +242,21 @@ static class TrafficLogging
         return string.Join("; ", headerGroups
             .Where(group => group is not null)
             .SelectMany(group => group!)
-            .Select(header => $"{header.Key}: {string.Join(", ", header.Value)}"));
+            .Select(header => $"{header.Key}: {FormatHeaderValue(header.Key, header.Value)}"));
     }
 
     public static string FormatHeaders(IHeaderDictionary headers)
     {
-        return string.Join("; ", headers.Select(header => $"{header.Key}: {header.Value}"));
+        return string.Join("; ", headers.Select(header => $"{header.Key}: {FormatHeaderValue(header.Key, header.Value)}"));
     }
+
+    private static string FormatHeaderValue(string name, IEnumerable<string> values) =>
+        name.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("x-goog-api-key", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("x-api-key", StringComparison.OrdinalIgnoreCase)
+            ? "[redacted]"
+            : string.Join(", ", values);
 
     private sealed class LoggingResponseStream(Stream inner, string requestId) : Stream
     {

@@ -8,11 +8,13 @@
 
 # LlmGateway
 
-本机 LLM API 反向代理（基于 **YARP**），发布为单文件 `LlmGateway.exe`。
+本机 LLM API 网关，发布为单文件 `LlmGateway.exe`。
 
 ## 解决什么问题
 
-本程序在本机监听端口，并通过 `Gateway:ResponsesMode` 映射文字模型：`Auto` 先原样调用上游 `/v1/responses`，仅在上游明确不支持端点时自动转换到 `/v1/chat/completions`；`Responses` 强制原样转发；`ChatCompletions` 强制协议转换。图像、视频和 Gemini 特殊 API 由 YARP 透明转发，并可通过 `Gateway:EndpointMappings` 配置外部路径到供应商路径的前缀映射。
+本程序在本机监听端口，汇总多个 OpenAI 兼容 Endpoint 的模型，并将请求转发到持有该模型的上游。每个 Endpoint 保留自己的原始 API Key；本地客户端只使用网关自动生成的 Gateway Key。网关每五分钟直连各 Endpoint 的 `/v1/models` 更新模型索引，请求优先发送给该模型最近成功的 Endpoint，首次及故障切换按配置顺序尝试。
+
+`Gateway:ResponsesMode` 用于映射文字模型：`Auto` 先原样调用上游 `/v1/responses`，仅在上游明确不支持端点时自动转换到 `/v1/chat/completions`；`Responses` 强制原样转发；`ChatCompletions` 强制协议转换。图像等其他 OpenAI 兼容路径会透明转发，并可通过 `Gateway:EndpointMappings` 配置路径前缀映射。
 
 ```
 Codex / 其他客户端
@@ -56,7 +58,15 @@ macOS 会将变量写入 `~/.codex/llm-gateway.env`，同时通过 `launchctl se
   "Gateway": {
     "LocalBindIp": "127.0.0.1",
     "ListenPort": 3001,
-    "UpstreamBaseUrl": "https://你的模型API根地址",
+    "ApiKey": "",
+    "Endpoints": [
+      {
+        "Name": "primary",
+        "BaseUrl": "https://你的模型API根地址",
+        "ApiKey": "上游原始 Key",
+        "Enabled": true
+      }
+    ],
     "CompatibilityMode": true,
     "DirectCodexBaseUrl": "https://你的模型API根地址/v1",
     "ExtraRequestHeaders": {
@@ -71,13 +81,15 @@ macOS 会将变量写入 `~/.codex/llm-gateway.env`，同时通过 `launchctl se
 |--------|------|
 | `Gateway.LocalBindIp` | 本地绑定 IP；允许局域网访问可设为 `0.0.0.0` |
 | `Gateway.ListenPort` | 本地监听端口 |
-| `Gateway.UpstreamBaseUrl` | 网关转发到的上游模型 API 根地址 |
+| `Gateway.ApiKey` | 本地 Gateway Key；留空时 CLI 自动生成并写回配置，客户端必须使用它 |
+| `Gateway.Endpoints` | 上游列表；每项的 `ApiKey` 仅供网关访问原始上游，绝不应给本地客户端使用 |
+| `Gateway.Endpoints[].BaseUrl` | 上游 API 根地址，可填写根地址或以 `/v1` 结尾的地址 |
 | `Gateway.CompatibilityMode` | 是否让 Codex 自动连接本地网关 |
 | `Gateway.DirectCodexBaseUrl` | 关闭兼容模式时使用的 Codex 直连地址 |
 | `Gateway.ExtraRequestHeaders` | 额外请求头；`User-Agent` 不会由配置主动写入 |
 | `Gateway.LogTraffic` | 是否记录客户端与上游的请求头、请求体、响应头和响应体 |
 
-改配置后**重启 exe** 生效。流量日志可能包含 API Key 和对话内容，只应在受信任环境开启。
+改配置后**重启 exe**生效。网关会在启动时立即刷新模型，之后每五分钟刷新；单个 Endpoint 刷新失败时会继续保留它上次成功获取的模型列表。流量日志会掩盖鉴权头，但仍可能包含对话内容，只应在受信任环境开启。
 
 ## 开发运行
 
@@ -107,7 +119,7 @@ dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFil
 
 - 原 base_url：`https://api.xxx.com/v1`
 - 改成：`http://127.0.0.1:3001/v1`
-- API Key 仍用原来的（原样转发 Authorization 等头）
+- API Key 改为 `Gateway.ApiKey`，而不是上游原始 Key
 
 ## Responses 兼容转换
 

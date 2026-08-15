@@ -143,7 +143,7 @@
               <Border Height="1" Background="{DynamicResource BorderSubtleBrush}" />
               <StackPanel Spacing="4">
                 <TextBlock Classes="section-title" Text="Gemini Image" />
-                <TextBlock Classes="caption" Text="使用 /v1beta 到 /v1beta 映射，并为 Gemini 原生图片请求使用独立密钥。" TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="Gemini 原生图片请求使用独立密钥。" TextWrapping="Wrap" />
               </StackPanel>
               <StackPanel Spacing="6">
                 <TextBlock Classes="caption" Text="Gemini Image API Key" />

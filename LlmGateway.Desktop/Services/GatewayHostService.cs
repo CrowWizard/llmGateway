@@ -87,7 +87,12 @@ public sealed class GatewayHostService
                 await ResponsesCompatibility.HandleAsync(
                     context,
                     httpClientFactory,
-                    upstreamBaseUrl,
+                    new GatewayEndpoint
+                    {
+                        Name = "default",
+                        BaseUrl = upstreamBaseUrl,
+                        ApiKey = effective.Endpoints.FirstOrDefault(endpoint => endpoint.Enabled)?.ApiKey ?? string.Empty
+                    },
                     effective.ExtraRequestHeaders,
                     effective.LogTraffic);
             });

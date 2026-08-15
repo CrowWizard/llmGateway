@@ -15,7 +15,7 @@ static class ResponsesCompatibility
     public static async Task HandleAsync(
         HttpContext context,
         IHttpClientFactory httpClientFactory,
-        string upstreamBaseUrl,
+        GatewayEndpoint upstream,
         IReadOnlyDictionary<string, string> extraHeaders,
         bool logTraffic,
         string mode = "Auto")
@@ -33,7 +33,7 @@ static class ResponsesCompatibility
         }
 
         var normalizedMode = NormalizeMode(mode);
-        var hasCachedNativeSupport = NativeResponsesSupport.TryGetValue(upstreamBaseUrl, out var supportsNativeResponses);
+        var hasCachedNativeSupport = NativeResponsesSupport.TryGetValue(upstream.NormalizedBaseUrl, out var supportsNativeResponses);
         var tryNativeResponses = normalizedMode == "Responses"
             || (normalizedMode == "Auto" && (!hasCachedNativeSupport || supportsNativeResponses));
         if (tryNativeResponses)
@@ -41,7 +41,7 @@ static class ResponsesCompatibility
             HttpResponseMessage nativeResponse;
             try
             {
-                nativeResponse = await SendAsync(context, httpClientFactory, request, upstreamBaseUrl, extraHeaders, "/v1/responses");
+                nativeResponse = await SendAsync(context, httpClientFactory, request, upstream, extraHeaders, "/v1/responses");
             }
             catch (TimeoutException exception)
             {
@@ -56,7 +56,7 @@ static class ResponsesCompatibility
 
             if (nativeResponse.IsSuccessStatusCode)
             {
-                NativeResponsesSupport[upstreamBaseUrl] = true;
+                NativeResponsesSupport[upstream.NormalizedBaseUrl] = true;
                 if (logTraffic)
                 {
                     Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff}] [{context.TraceIdentifier}] [端点映射] POST /v1/responses -> POST /v1/responses");
@@ -72,7 +72,7 @@ static class ResponsesCompatibility
                 return;
             }
 
-            NativeResponsesSupport[upstreamBaseUrl] = false;
+            NativeResponsesSupport[upstream.NormalizedBaseUrl] = false;
             nativeResponse.Dispose();
         }
 
@@ -86,7 +86,7 @@ static class ResponsesCompatibility
         using var upstreamRequest = CreateUpstreamRequest(
             context,
             chatRequest!,
-            upstreamBaseUrl,
+            upstream,
             extraHeaders,
             "/v1/chat/completions");
 
@@ -149,11 +149,11 @@ static class ResponsesCompatibility
         HttpContext context,
         IHttpClientFactory httpClientFactory,
         JsonObject body,
-        string upstreamBaseUrl,
+        GatewayEndpoint upstream,
         IReadOnlyDictionary<string, string> extraHeaders,
         string endpoint)
     {
-        using var request = CreateUpstreamRequest(context, body, upstreamBaseUrl, extraHeaders, endpoint);
+        using var request = CreateUpstreamRequest(context, body, upstream, extraHeaders, endpoint);
         try
         {
             return await httpClientFactory.CreateClient("responses-compatibility").SendAsync(
@@ -759,11 +759,11 @@ static class ResponsesCompatibility
     private static HttpRequestMessage CreateUpstreamRequest(
         HttpContext context,
         JsonObject body,
-        string upstreamBaseUrl,
+        GatewayEndpoint upstream,
         IReadOnlyDictionary<string, string> extraHeaders,
         string endpoint)
     {
-        var uri = $"{upstreamBaseUrl.TrimEnd('/')}{endpoint}";
+        var uri = $"{upstream.NormalizedBaseUrl}{endpoint}";
         var request = new HttpRequestMessage(HttpMethod.Post, uri)
         {
             Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json")
@@ -790,6 +790,7 @@ static class ResponsesCompatibility
             request.Headers.Remove(name);
             request.Headers.TryAddWithoutValidation(name, value);
         }
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", upstream.ApiKey);
         return request;
     }
 

@@ -1,9 +1,21 @@
+using System.Text.Json.Serialization;
+
 namespace LlmGateway.Desktop.Models;
+
+public sealed class GatewayEndpointSettings
+{
+    public string Name { get; set; } = string.Empty;
+    public string BaseUrl { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
+    public bool Enabled { get; set; } = true;
+}
 
 public sealed class GatewaySettings
 {
     public string LocalBindIp { get; set; } = "127.0.0.1";
     public int ListenPort { get; set; } = 23001;
+    [JsonPropertyName("ApiKey")]
+    public string GatewayApiKey { get; set; } = string.Empty;
     public string UpstreamBaseUrl { get; set; } = "https://api.ailili.chat";
     public bool CompatibilityMode { get; set; }
     public string ResponsesMode { get; set; } = "Auto";
@@ -16,16 +28,16 @@ public sealed class GatewaySettings
     public Dictionary<string, string> EndpointMappings { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
         ["/v1/images/generations"] = "/v1/images/generations",
-        ["/v1/images/edits"] = "/v1/images/edits",
-        ["/v1beta"] = "/v1beta",
-        ["/v1/gemini-openai"] = "/v1beta/openai"
+        ["/v1/images/edits"] = "/v1/images/edits"
     };
+    public List<GatewayEndpointSettings> Endpoints { get; set; } = [];
     public bool LogTraffic { get; set; }
 
     public GatewaySettings Clone() => new()
     {
         LocalBindIp = LocalBindIp,
         ListenPort = ListenPort,
+        GatewayApiKey = GatewayApiKey,
         UpstreamBaseUrl = UpstreamBaseUrl,
         CompatibilityMode = CompatibilityMode,
         ResponsesMode = ResponsesMode,
@@ -33,6 +45,13 @@ public sealed class GatewaySettings
         DirectCodexBaseUrl = DirectCodexBaseUrl,
         ExtraRequestHeaders = new Dictionary<string, string>(ExtraRequestHeaders, StringComparer.OrdinalIgnoreCase),
         EndpointMappings = new Dictionary<string, string>(EndpointMappings, StringComparer.OrdinalIgnoreCase),
+        Endpoints = Endpoints.Select(endpoint => new GatewayEndpointSettings
+        {
+            Name = endpoint.Name,
+            BaseUrl = endpoint.BaseUrl,
+            ApiKey = endpoint.ApiKey,
+            Enabled = endpoint.Enabled
+        }).ToList(),
         LogTraffic = LogTraffic
     };
 }
