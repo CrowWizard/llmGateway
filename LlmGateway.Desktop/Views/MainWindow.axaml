@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:LlmGateway.Desktop.ViewModels"
+        xmlns:models="using:LlmGateway.Desktop.Models"
         x:Class="LlmGateway.Desktop.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Codex 配置"
@@ -45,45 +46,65 @@
           <Border Classes="card">
             <StackPanel Spacing="20">
               <StackPanel Spacing="4">
-                <TextBlock Classes="section-title" Text="Codex" />
-                <TextBlock Classes="caption" Text="用于对话、代码生成和模型访问。" />
+                <TextBlock Classes="section-title" Text="文字模型" />
+                <TextBlock Classes="caption" Text="用于 Codex 对话、代码生成和模型访问。每类模型只能选择一组主用配置。" TextWrapping="Wrap" />
               </StackPanel>
-              <StackPanel Spacing="6">
-                <TextBlock Classes="caption" Text="Base URL" />
-                <TextBox Text="{Binding CodexBaseUrl}" PlaceholderText="https://api.example.com/v1" />
-              </StackPanel>
-              <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
-                <StackPanel Spacing="6">
-                  <TextBlock Classes="caption" Text="API Key" />
-                  <TextBox x:Name="ApiKeyBox" Text="{Binding ApiKey}" PasswordChar="●" RevealPassword="{Binding IsApiKeyVisible}" PlaceholderText="输入 BYOK 令牌" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Spacing="6">
-                  <TextBlock Classes="caption" Text="模型" />
-                  <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding Model}" IsEditable="True" />
-                </StackPanel>
-              </Grid>
+              <ItemsControl ItemsSource="{Binding TextModelGroups}">
+                <ItemsControl.DataTemplates>
+                  <DataTemplate DataType="models:ModelGroupSettings">
+                    <Border BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,8">
+                      <StackPanel Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                          <TextBox Text="{Binding Name}" PlaceholderText="配置名称" />
+                          <Button Grid.Column="1" Classes="secondary" Command="{Binding $parent[Window].DataContext.SetPrimaryTextModelGroupCommand}" CommandParameter="{Binding}" Content="设为主用" />
+                          <Button Grid.Column="2" Classes="ghost" Command="{Binding $parent[Window].DataContext.RemoveTextModelGroupCommand}" CommandParameter="{Binding}" Content="删除" />
+                        </Grid>
+                        <TextBlock Classes="caption" Text="{Binding IsPrimary, StringFormat='主用：{0}'}" />
+                        <TextBox Text="{Binding BaseUrl}" PlaceholderText="https://api.ailili.chat/v1" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                          <TextBox Text="{Binding ApiKey}" PasswordChar="●" PlaceholderText="API Key" />
+                          <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[Window].DataContext.Models}" SelectedItem="{Binding Model}" IsEditable="True" PlaceholderText="模型" />
+                        </Grid>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.DataTemplates>
+              </ItemsControl>
               <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
+                <Button Classes="secondary" Command="{Binding AddTextModelGroupCommand}" Content="添加文字模型" />
                 <Button Classes="secondary" Command="{Binding FetchModelsCommand}" Content="验证并获取模型" />
-                <Button Grid.Column="1" Classes="ghost" Command="{Binding ToggleApiKeyCommand}" Content="显示 / 隐藏 Key" />
+                <Button Grid.Column="2" Classes="ghost" Command="{Binding ToggleApiKeyCommand}" Content="显示 / 隐藏 Key" />
               </Grid>
 
               <Border Height="1" Background="{DynamicResource BorderSubtleBrush}" />
 
               <StackPanel Spacing="4">
                 <TextBlock Classes="section-title" Text="生图" />
-                <TextBlock Classes="caption" Text="与 Codex 共用 Base URL，单独配置凭据和模型。" />
+                <TextBlock Classes="caption" Text="与文字模型独立配置。网关会将两类模型组汇总到同一 Endpoint 列表。" TextWrapping="Wrap" />
               </StackPanel>
-              <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
-                <StackPanel Spacing="6">
-                  <TextBlock Classes="caption" Text="生图 API Key" />
-                  <TextBox Text="{Binding ImageApiKey}" PasswordChar="●" RevealPassword="{Binding IsApiKeyVisible}" PlaceholderText="输入可访问生图服务的令牌" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Spacing="6">
-                  <TextBlock Classes="caption" Text="生图模型" />
-                  <ComboBox ItemsSource="{Binding ImageModels}" SelectedItem="{Binding ImageModel}" Text="{Binding ImageModel}" IsEditable="True" PlaceholderText="获取或输入模型 ID" />
-                </StackPanel>
-              </Grid>
+              <ItemsControl ItemsSource="{Binding ImageModelGroups}">
+                <ItemsControl.DataTemplates>
+                  <DataTemplate DataType="models:ModelGroupSettings">
+                    <Border BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,8">
+                      <StackPanel Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                          <TextBox Text="{Binding Name}" PlaceholderText="配置名称" />
+                          <Button Grid.Column="1" Classes="secondary" Command="{Binding $parent[Window].DataContext.SetPrimaryImageModelGroupCommand}" CommandParameter="{Binding}" Content="设为主用" />
+                          <Button Grid.Column="2" Classes="ghost" Command="{Binding $parent[Window].DataContext.RemoveImageModelGroupCommand}" CommandParameter="{Binding}" Content="删除" />
+                        </Grid>
+                        <TextBlock Classes="caption" Text="{Binding IsPrimary, StringFormat='主用：{0}'}" />
+                        <TextBox Text="{Binding BaseUrl}" PlaceholderText="https://api.ailili.chat/v1" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                          <TextBox Text="{Binding ApiKey}" PasswordChar="●" PlaceholderText="API Key" />
+                          <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[Window].DataContext.ImageModels}" SelectedItem="{Binding Model}" IsEditable="True" PlaceholderText="生图模型" />
+                        </Grid>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.DataTemplates>
+              </ItemsControl>
               <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                <Button Classes="secondary" Command="{Binding AddImageModelGroupCommand}" Content="添加生图模型" />
                 <Button Classes="secondary" Command="{Binding FetchImageModelsCommand}" Content="获取生图模型" />
                 <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ImageGenerationStatus}" VerticalAlignment="Center" TextWrapping="Wrap" />
               </Grid>

@@ -35,7 +35,6 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _geminiImageApiKey = string.Empty;
     private string _gatewayApiKey = string.Empty;
     private Dictionary<string, string> _endpointMappings = new(StringComparer.OrdinalIgnoreCase);
-    private List<GatewayEndpointSettings> _endpoints = [];
     private bool _compatibilityMode;
     private bool _logTraffic;
     private bool _isGatewayRunning;
@@ -99,6 +98,12 @@ public sealed class MainWindowViewModel : ObservableObject
         SaveConfigurationCommand = new AsyncCommand(SaveConfigurationAsync);
         FetchModelsCommand = new AsyncCommand(FetchModelsAsync);
         FetchImageModelsCommand = new AsyncCommand(FetchImageModelsAsync);
+        AddTextModelGroupCommand = new AsyncCommand(() => AddModelGroupAsync(TextModelGroups, "文字模型"));
+        AddImageModelGroupCommand = new AsyncCommand(() => AddModelGroupAsync(ImageModelGroups, "生图模型"));
+        RemoveTextModelGroupCommand = new AsyncCommand<ModelGroupSettings>(group => RemoveModelGroupAsync(TextModelGroups, group));
+        RemoveImageModelGroupCommand = new AsyncCommand<ModelGroupSettings>(group => RemoveModelGroupAsync(ImageModelGroups, group));
+        SetPrimaryTextModelGroupCommand = new AsyncCommand<ModelGroupSettings>(group => SetPrimaryModelGroupAsync(TextModelGroups, group));
+        SetPrimaryImageModelGroupCommand = new AsyncCommand<ModelGroupSettings>(group => SetPrimaryModelGroupAsync(ImageModelGroups, group));
         RestoreBackupCommand = new AsyncCommand(RestoreBackupAsync);
         RefreshBackupsCommand = new AsyncCommand(RefreshBackupsAsync);
         LaunchChatGptCommand = new AsyncCommand(LaunchChatGptAsync);
@@ -124,6 +129,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public ObservableCollection<string> Models { get; } = [];
     public ObservableCollection<string> ImageModels { get; } = [];
+    public ObservableCollection<ModelGroupSettings> TextModelGroups { get; } = [];
+    public ObservableCollection<ModelGroupSettings> ImageModelGroups { get; } = [];
     public ObservableCollection<BackupItem> Backups { get; } = [];
     public ObservableCollection<string> GatewayLogs { get; } = [];
 
@@ -135,6 +142,12 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand SaveConfigurationCommand { get; }
     public AsyncCommand FetchModelsCommand { get; }
     public AsyncCommand FetchImageModelsCommand { get; }
+    public AsyncCommand AddTextModelGroupCommand { get; }
+    public AsyncCommand AddImageModelGroupCommand { get; }
+    public AsyncCommand<ModelGroupSettings> RemoveTextModelGroupCommand { get; }
+    public AsyncCommand<ModelGroupSettings> RemoveImageModelGroupCommand { get; }
+    public AsyncCommand<ModelGroupSettings> SetPrimaryTextModelGroupCommand { get; }
+    public AsyncCommand<ModelGroupSettings> SetPrimaryImageModelGroupCommand { get; }
     public AsyncCommand RestoreBackupCommand { get; }
     public AsyncCommand RefreshBackupsCommand { get; }
     public AsyncCommand LaunchChatGptCommand { get; }
@@ -263,9 +276,11 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             ApplyCodex(_codexConfig.Load());
             ApplyGateway(_gatewaySettingsService.Load());
-            ApiKey = _environmentService.Read(EnvironmentKey);
-            ImageApiKey = _environmentService.Read("OPENAI_API_KEY");
-            ImageModel = _environmentService.Read("OPENAI_IMAGE_MODEL");
+            var primaryTextGroup = GetPrimaryModelGroup(TextModelGroups);
+            if (primaryTextGroup is not null && string.IsNullOrWhiteSpace(primaryTextGroup.ApiKey))
+            {
+                primaryTextGroup.ApiKey = _environmentService.Read(EnvironmentKey);
+            }
             RefreshBackups();
             RefreshApplicationStatus();
             GatewayStatus = $"配置文件：{_gatewaySettingsService.SettingsPath}";
@@ -285,39 +300,22 @@ public sealed class MainWindowViewModel : ObservableObject
         try
         {
             await _launcher.CloseManagedClientsAsync();
-            if (string.IsNullOrWhiteSpace(ApiKey))
-            {
-                throw new InvalidOperationException("令牌不能为空。");
-            }
-            var saveImageConfiguration = !CompatibilityMode
-                || !string.IsNullOrWhiteSpace(ImageApiKey)
-                || !string.IsNullOrWhiteSpace(ImageModel);
-            if (saveImageConfiguration && string.IsNullOrWhiteSpace(ImageApiKey))
-            {
-                throw new InvalidOperationException("请填写生图 API Key。");
-            }
-            if (saveImageConfiguration && string.IsNullOrWhiteSpace(ImageModel))
-            {
-                throw new InvalidOperationException("请选择生图模型。");
-            }
+            ValidateModelGroups(TextModelGroups, "文字");
+            ValidateModelGroups(ImageModelGroups, "生图");
+            var primaryTextGroup = GetRequiredPrimaryModelGroup(TextModelGroups, "文字");
 
             var hasExistingConfiguration = File.Exists(_paths.CodexConfigPath) || File.Exists(_paths.CodexAuthPath);
             var previousBaseUrl = _codexConfig.Load().BaseUrl;
             var previousConfigurationName = EndpointNormalizer.GetConfigurationName(
                 IsLocalGatewayUrl(previousBaseUrl) ? UpstreamBaseUrl : previousBaseUrl);
             var backup = hasExistingConfiguration ? _backupService.Create(previousConfigurationName).DisplayName : string.Empty;
-            var endpoint = UpstreamBaseUrl;
+            var endpoint = primaryTextGroup.BaseUrl;
             Provider = EndpointNormalizer.GetConfigurationName(endpoint);
             EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(endpoint);
             await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
             await RestartGatewayIfRunningAsync();
-            await _environmentService.SaveAsync(EnvironmentKey, ApiKey);
             await _environmentService.SaveAsync("OPENAI_BASE_URL", LocalGatewayBaseUrl);
             await _environmentService.SaveAsync("OPENAI_API_KEY", GatewayApiKey);
-            if (saveImageConfiguration)
-            {
-                await _environmentService.SaveAsync("OPENAI_IMAGE_MODEL", ImageModel.Trim());
-            }
             await _codexConfig.SaveAsync(CurrentCodexSettings());
             await _codexStateService.SynchronizeModelProviderAsync(Provider);
             var authResult = await _codexAuth.EnsureAsync();
@@ -460,14 +458,15 @@ public sealed class MainWindowViewModel : ObservableObject
         try
         {
             CodexStatus = "正在验证令牌并获取模型…";
-            var models = await _modelService.FetchAsync(UpstreamBaseUrl, ApiKey);
-            var previous = Model;
+            var group = GetRequiredPrimaryModelGroup(TextModelGroups, "文字");
+            var models = await _modelService.FetchAsync(group.BaseUrl, group.ApiKey);
+            var previous = group.Model;
             Models.Clear();
             foreach (var item in models)
             {
                 Models.Add(item);
             }
-            Model = models.Contains(previous, StringComparer.Ordinal) ? previous : models[0];
+            group.Model = models.Contains(previous, StringComparer.Ordinal) ? previous : models[0];
             CodexStatus = $"令牌验证通过，已获取 {models.Count} 个模型。";
         }
         catch (Exception exception)
@@ -482,19 +481,20 @@ public sealed class MainWindowViewModel : ObservableObject
         try
         {
             ImageGenerationStatus = "正在获取生图模型…";
-            var models = await _modelService.FetchAsync(CodexBaseUrl, ImageApiKey);
-            var previous = ImageModel;
+            var group = GetRequiredPrimaryModelGroup(ImageModelGroups, "生图");
+            var models = await _modelService.FetchAsync(group.BaseUrl, group.ApiKey);
+            var previous = group.Model;
             ImageModels.Clear();
             foreach (var item in models)
             {
                 ImageModels.Add(item);
             }
-            ImageModel = models.Contains(previous, StringComparer.Ordinal)
+            group.Model = models.Contains(previous, StringComparer.Ordinal)
                 ? previous
                 : models.Contains("gpt-image-2", StringComparer.Ordinal)
                     ? "gpt-image-2"
                     : models[0];
-            ImageGenerationStatus = $"已获取 {models.Count} 个模型，已默认选择：{ImageModel}。";
+            ImageGenerationStatus = $"已获取 {models.Count} 个模型，已默认选择：{group.Model}。";
         }
         catch (Exception exception)
         {
@@ -535,9 +535,6 @@ public sealed class MainWindowViewModel : ObservableObject
             await _backupService.RestoreAsync(selected);
             ApplyCodex(_codexConfig.Load());
             await _codexStateService.SynchronizeModelProviderAsync(Provider);
-            ApiKey = _environmentService.Read(EnvironmentKey);
-            ImageApiKey = _environmentService.Read("OPENAI_API_KEY");
-            ImageModel = _environmentService.Read("OPENAI_IMAGE_MODEL");
             RefreshBackups();
             CodexStatus = $"已还原：{selected.DisplayName}";
         }
@@ -737,6 +734,8 @@ public sealed class MainWindowViewModel : ObservableObject
         DirectCodexBaseUrl = EndpointNormalizer.Normalize(CodexBaseUrl),
         LogTraffic = LogTraffic,
         EndpointMappings = new Dictionary<string, string>(_endpointMappings, StringComparer.OrdinalIgnoreCase),
+        TextModelGroups = TextModelGroups.Select(group => group.Clone()).ToList(),
+        ImageModelGroups = ImageModelGroups.Select(group => group.Clone()).ToList(),
         Endpoints = CurrentEndpoints(),
         ExtraRequestHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -746,10 +745,10 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private CodexSettings CurrentCodexSettings() => new()
     {
-        Model = Model,
-        Provider = EndpointNormalizer.GetConfigurationName(UpstreamBaseUrl),
+        Model = GetRequiredPrimaryModelGroup(TextModelGroups, "文字").Model,
+        Provider = EndpointNormalizer.GetConfigurationName(GetRequiredPrimaryModelGroup(TextModelGroups, "文字").BaseUrl),
         BaseUrl = LocalGatewayBaseUrl,
-        EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(UpstreamBaseUrl)
+        EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(GetRequiredPrimaryModelGroup(TextModelGroups, "文字").BaseUrl)
     };
 
     private void ApplyGateway(GatewaySettings settings)
@@ -759,12 +758,35 @@ public sealed class MainWindowViewModel : ObservableObject
         GatewayApiKey = string.IsNullOrWhiteSpace(settings.GatewayApiKey)
             ? GatewayEndpoint.CreateGatewayApiKey()
             : settings.GatewayApiKey;
-        UpstreamBaseUrl = EndpointNormalizer.Normalize(settings.UpstreamBaseUrl);
+        var legacyEndpoint = settings.Endpoints.FirstOrDefault(endpoint => endpoint.Enabled)
+            ?? settings.Endpoints.FirstOrDefault();
+        var legacyBaseUrl = string.IsNullOrWhiteSpace(legacyEndpoint?.BaseUrl)
+            ? (string.IsNullOrWhiteSpace(settings.DirectCodexBaseUrl) ? "https://api.ailili.chat/v1" : settings.DirectCodexBaseUrl)
+            : legacyEndpoint.BaseUrl;
+        var legacyText = new ModelGroupSettings
+        {
+            Name = "默认文字模型",
+            BaseUrl = legacyBaseUrl,
+            ApiKey = legacyEndpoint?.ApiKey ?? string.Empty,
+            Model = Model,
+            IsPrimary = true
+        };
+        var legacyImage = new ModelGroupSettings
+        {
+            Name = "默认生图模型",
+            BaseUrl = legacyText.BaseUrl,
+            ApiKey = legacyText.ApiKey,
+            Model = string.Empty,
+            IsPrimary = true
+        };
+        ReplaceModelGroups(TextModelGroups, settings.TextModelGroups.Count > 0 ? settings.TextModelGroups : [legacyText]);
+        ReplaceModelGroups(ImageModelGroups, settings.ImageModelGroups.Count > 0 ? settings.ImageModelGroups : [legacyImage]);
+        var primaryTextGroup = GetRequiredPrimaryModelGroup(TextModelGroups, "文字");
+        UpstreamBaseUrl = EndpointNormalizer.Normalize(primaryTextGroup.BaseUrl);
         ApplyEndpointIdentity(UpstreamBaseUrl);
         ResponsesMode = settings.ResponsesMode;
         GeminiImageApiKey = settings.GeminiImageApiKey;
         _endpointMappings = new Dictionary<string, string>(settings.EndpointMappings, StringComparer.OrdinalIgnoreCase);
-        _endpoints = settings.Endpoints;
         CompatibilityMode = false;
         if (!string.IsNullOrWhiteSpace(settings.DirectCodexBaseUrl))
         {
@@ -775,24 +797,24 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private List<GatewayEndpointSettings> CurrentEndpoints()
     {
-        var defaultName = EndpointNormalizer.GetConfigurationName(UpstreamBaseUrl);
-        var primary = new GatewayEndpointSettings
-        {
-            Name = string.IsNullOrWhiteSpace(defaultName) ? "default" : defaultName,
-            BaseUrl = EndpointNormalizer.Normalize(UpstreamBaseUrl),
-            ApiKey = ApiKey.Trim(),
-            Enabled = true
-        };
-        var additional = _endpoints
-            .Where(endpoint => !string.Equals(endpoint.Name, primary.Name, StringComparison.OrdinalIgnoreCase))
-            .Select(endpoint => new GatewayEndpointSettings
+        var groups = TextModelGroups.Select((group, index) => (Prefix: "text", Index: index, Group: group))
+            .Concat(ImageModelGroups.Select((group, index) => (Prefix: "image", Index: index, Group: group)))
+            .GroupBy(item => $"{EndpointNormalizer.Normalize(item.Group.BaseUrl).TrimEnd('/')}\n{item.Group.ApiKey.Trim()}", StringComparer.OrdinalIgnoreCase);
+
+        return groups
+            .Select((groups, index) =>
             {
-                Name = endpoint.Name,
-                BaseUrl = endpoint.BaseUrl,
-                ApiKey = endpoint.ApiKey,
-                Enabled = endpoint.Enabled
-            });
-        return [primary, .. additional];
+                var item = groups.First();
+                var group = item.Group;
+                return new GatewayEndpointSettings
+                {
+                    Name = $"{item.Prefix}-{item.Index + 1}-{(string.IsNullOrWhiteSpace(group.Name) ? $"endpoint-{index + 1}" : group.Name.Trim())}",
+                    BaseUrl = EndpointNormalizer.Normalize(group.BaseUrl),
+                    ApiKey = group.ApiKey.Trim(),
+                    Enabled = true
+                };
+            })
+            .ToList();
     }
 
     private void ApplyCodex(CodexSettings settings)
@@ -801,5 +823,79 @@ public sealed class MainWindowViewModel : ObservableObject
         CodexBaseUrl = EndpointNormalizer.Normalize(settings.BaseUrl);
         Models.Clear();
         Models.Add(Model);
+    }
+
+    private static ModelGroupSettings? GetPrimaryModelGroup(IEnumerable<ModelGroupSettings> groups) =>
+        groups.FirstOrDefault(group => group.IsPrimary) ?? groups.FirstOrDefault();
+
+    private static ModelGroupSettings GetRequiredPrimaryModelGroup(IEnumerable<ModelGroupSettings> groups, string category) =>
+        GetPrimaryModelGroup(groups) ?? throw new InvalidOperationException($"请至少添加一组{category}模型配置。" );
+
+    private static void ReplaceModelGroups(ObservableCollection<ModelGroupSettings> destination, IEnumerable<ModelGroupSettings> source)
+    {
+        destination.Clear();
+        foreach (var group in source.Select(group => group.Clone()))
+        {
+            destination.Add(group);
+        }
+
+        if (destination.Count > 0 && !destination.Any(group => group.IsPrimary))
+        {
+            destination[0].IsPrimary = true;
+        }
+    }
+
+    private static void ValidateModelGroups(IEnumerable<ModelGroupSettings> groups, string category)
+    {
+        var configured = groups.ToArray();
+        if (configured.Length == 0)
+        {
+            throw new InvalidOperationException($"请至少添加一组{category}模型配置。" );
+        }
+        if (configured.Any(group => string.IsNullOrWhiteSpace(group.Name)
+            || string.IsNullOrWhiteSpace(group.BaseUrl)
+            || string.IsNullOrWhiteSpace(group.ApiKey)
+            || string.IsNullOrWhiteSpace(group.Model)))
+        {
+            throw new InvalidOperationException($"每组{category}模型都需要填写名称、Base URL、API Key 和模型。" );
+        }
+        if (configured.Count(group => group.IsPrimary) != 1)
+        {
+            throw new InvalidOperationException($"{category}模型必须且只能设置一组为主用。" );
+        }
+        if (configured.GroupBy(group => $"{EndpointNormalizer.Normalize(group.BaseUrl).TrimEnd('/')}\n{group.ApiKey.Trim()}", StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+        {
+            throw new InvalidOperationException($"{category}模型中 Base URL 与 API Key 的组合不能重复。" );
+        }
+    }
+
+    private static Task AddModelGroupAsync(ObservableCollection<ModelGroupSettings> groups, string prefix)
+    {
+        groups.Add(new ModelGroupSettings
+        {
+            Name = $"{prefix} {groups.Count + 1}",
+            IsPrimary = groups.Count == 0
+        });
+        return Task.CompletedTask;
+    }
+
+    private static Task RemoveModelGroupAsync(ObservableCollection<ModelGroupSettings> groups, ModelGroupSettings group)
+    {
+        var wasPrimary = group.IsPrimary;
+        groups.Remove(group);
+        if (wasPrimary && groups.Count > 0)
+        {
+            groups[0].IsPrimary = true;
+        }
+        return Task.CompletedTask;
+    }
+
+    private static Task SetPrimaryModelGroupAsync(ObservableCollection<ModelGroupSettings> groups, ModelGroupSettings group)
+    {
+        foreach (var item in groups)
+        {
+            item.IsPrimary = ReferenceEquals(item, group);
+        }
+        return Task.CompletedTask;
     }
 }

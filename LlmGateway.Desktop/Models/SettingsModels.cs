@@ -1,6 +1,31 @@
 using System.Text.Json.Serialization;
+using LlmGateway.Desktop.Infrastructure;
 
 namespace LlmGateway.Desktop.Models;
+
+public sealed class ModelGroupSettings : ObservableObject
+{
+    private string _name = string.Empty;
+    private string _baseUrl = "https://api.ailili.chat/v1";
+    private string _apiKey = string.Empty;
+    private string _model = string.Empty;
+    private bool _isPrimary;
+
+    public string Name { get => _name; set => SetProperty(ref _name, value); }
+    public string BaseUrl { get => _baseUrl; set => SetProperty(ref _baseUrl, value); }
+    public string ApiKey { get => _apiKey; set => SetProperty(ref _apiKey, value); }
+    public string Model { get => _model; set => SetProperty(ref _model, value); }
+    public bool IsPrimary { get => _isPrimary; set => SetProperty(ref _isPrimary, value); }
+
+    public ModelGroupSettings Clone() => new()
+    {
+        Name = Name,
+        BaseUrl = BaseUrl,
+        ApiKey = ApiKey,
+        Model = Model,
+        IsPrimary = IsPrimary
+    };
+}
 
 public sealed class GatewayEndpointSettings
 {
@@ -30,6 +55,8 @@ public sealed class GatewaySettings
         ["/v1/images/generations"] = "/v1/images/generations",
         ["/v1/images/edits"] = "/v1/images/edits"
     };
+    public List<ModelGroupSettings> TextModelGroups { get; set; } = [];
+    public List<ModelGroupSettings> ImageModelGroups { get; set; } = [];
     public List<GatewayEndpointSettings> Endpoints { get; set; } = [];
     public bool LogTraffic { get; set; }
 
@@ -45,6 +72,8 @@ public sealed class GatewaySettings
         DirectCodexBaseUrl = DirectCodexBaseUrl,
         ExtraRequestHeaders = new Dictionary<string, string>(ExtraRequestHeaders, StringComparer.OrdinalIgnoreCase),
         EndpointMappings = new Dictionary<string, string>(EndpointMappings, StringComparer.OrdinalIgnoreCase),
+        TextModelGroups = TextModelGroups.Select(group => group.Clone()).ToList(),
+        ImageModelGroups = ImageModelGroups.Select(group => group.Clone()).ToList(),
         Endpoints = Endpoints.Select(endpoint => new GatewayEndpointSettings
         {
             Name = endpoint.Name,
