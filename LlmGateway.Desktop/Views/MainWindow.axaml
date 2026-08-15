@@ -49,6 +49,10 @@
                 <TextBlock Classes="section-title" Text="文字模型" />
                 <TextBlock Classes="caption" Text="用于 Codex 对话、代码生成和模型访问。每类模型只能选择一组主用配置。" TextWrapping="Wrap" />
               </StackPanel>
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBlock Classes="caption" Text="文字模型配置列表" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="secondary" Command="{Binding AddTextModelGroupCommand}" Content="添加文字配置" />
+              </Grid>
               <ItemsControl ItemsSource="{Binding TextModelGroups}">
                 <ItemsControl.DataTemplates>
                   <DataTemplate DataType="models:ModelGroupSettings">
@@ -70,10 +74,9 @@
                   </DataTemplate>
                 </ItemsControl.DataTemplates>
               </ItemsControl>
-              <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
-                <Button Classes="secondary" Command="{Binding AddTextModelGroupCommand}" Content="添加文字模型" />
-                <Button Classes="secondary" Command="{Binding FetchModelsCommand}" Content="验证并获取模型" />
-                <Button Grid.Column="2" Classes="ghost" Command="{Binding ToggleApiKeyCommand}" Content="显示 / 隐藏 Key" />
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                <Button Classes="secondary" Command="{Binding FetchModelsCommand}" Content="验证并获取主用模型" />
+                <Button Grid.Column="1" Classes="ghost" Command="{Binding ToggleApiKeyCommand}" Content="显示 / 隐藏 Key" />
               </Grid>
 
               <Border Height="1" Background="{DynamicResource BorderSubtleBrush}" />
@@ -82,6 +85,10 @@
                 <TextBlock Classes="section-title" Text="生图" />
                 <TextBlock Classes="caption" Text="与文字模型独立配置。网关会将两类模型组汇总到同一 Endpoint 列表。" TextWrapping="Wrap" />
               </StackPanel>
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBlock Classes="caption" Text="生图模型配置列表" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="secondary" Command="{Binding AddImageModelGroupCommand}" Content="添加生图配置" />
+              </Grid>
               <ItemsControl ItemsSource="{Binding ImageModelGroups}">
                 <ItemsControl.DataTemplates>
                   <DataTemplate DataType="models:ModelGroupSettings">
@@ -104,8 +111,7 @@
                 </ItemsControl.DataTemplates>
               </ItemsControl>
               <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                <Button Classes="secondary" Command="{Binding AddImageModelGroupCommand}" Content="添加生图模型" />
-                <Button Classes="secondary" Command="{Binding FetchImageModelsCommand}" Content="获取生图模型" />
+                <Button Classes="secondary" Command="{Binding FetchImageModelsCommand}" Content="获取主用生图模型" />
                 <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ImageGenerationStatus}" VerticalAlignment="Center" TextWrapping="Wrap" />
               </Grid>
             </StackPanel>

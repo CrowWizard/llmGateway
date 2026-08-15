@@ -123,7 +123,7 @@ app.MapPost("/v1/responses", async (HttpContext context, IHttpClientFactory http
 });
 app.MapMethods("/v1/{**path}", ["GET", "POST", "PUT", "PATCH", "DELETE"], async (HttpContext context, EndpointForwarder forwarder) =>
 {
-    await forwarder.ForwardAsync(context, extraHeaders, endpointMappings, context.RequestAborted);
+    await forwarder.ForwardAsync(context, extraHeaders, endpointMappings, logTraffic, context.RequestAborted);
 });
 
 Console.WriteLine("========================================");

@@ -30,10 +30,10 @@ public sealed class GatewayEndpointTests
     }
 
     [Fact]
-    public void CreateGatewayApiKeyCreatesOpaqueLocalKey()
+    public void CreateGatewayApiKeyCreatesOpenAiStyleLocalKey()
     {
         var key = GatewayEndpoint.CreateGatewayApiKey();
 
-        Assert.Matches("^lgw_[0-9a-f]{64}$", key);
+        Assert.Matches("^sk-[0-9a-f]{64}$", key);
     }
 }

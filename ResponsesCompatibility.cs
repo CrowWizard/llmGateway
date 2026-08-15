@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -41,7 +42,10 @@ static class ResponsesCompatibility
             HttpResponseMessage nativeResponse;
             try
             {
+                var nativeStartedAt = Stopwatch.GetTimestamp();
+                LogRequest(context, upstream, "/v1/responses", request, logTraffic, "原生 Responses");
                 nativeResponse = await SendAsync(context, httpClientFactory, request, upstream, extraHeaders, "/v1/responses");
+                LogResponse(context, upstream, nativeResponse, nativeStartedAt, logTraffic, "原生 Responses");
             }
             catch (TimeoutException exception)
             {
@@ -73,6 +77,10 @@ static class ResponsesCompatibility
             }
 
             NativeResponsesSupport[upstream.NormalizedBaseUrl] = false;
+            if (logTraffic)
+            {
+                Console.WriteLine($"[{Timestamp()}] [{context.TraceIdentifier}] [协议降级] endpoint={upstream.Name}, Responses 不受支持，改用 Chat Completions");
+            }
             nativeResponse.Dispose();
         }
 
@@ -82,10 +90,11 @@ static class ResponsesCompatibility
             return;
         }
 
+        var convertedRequest = chatRequest!;
         var streaming = request["stream"]?.GetValue<bool>() == true;
         using var upstreamRequest = CreateUpstreamRequest(
             context,
-            chatRequest!,
+            convertedRequest,
             upstream,
             extraHeaders,
             "/v1/chat/completions");
@@ -93,15 +102,20 @@ static class ResponsesCompatibility
         if (logTraffic)
         {
             Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff}] [{context.TraceIdentifier}] [协议转换] POST /v1/responses -> POST /v1/chat/completions");
+            Console.WriteLine($"[{context.TraceIdentifier}] [转换后请求体] {convertedRequest.ToJsonString()}");
+            Console.WriteLine($"[{context.TraceIdentifier}] [发往上游] endpoint={upstream.Name}, POST {upstreamRequest.RequestUri}");
+            Console.WriteLine($"[{context.TraceIdentifier}] [发往上游头] {FormatHeaders(upstreamRequest.Headers, upstreamRequest.Content?.Headers)}");
         }
 
         HttpResponseMessage upstreamResponse;
         try
         {
+            var chatStartedAt = Stopwatch.GetTimestamp();
             upstreamResponse = await httpClientFactory.CreateClient("responses-compatibility").SendAsync(
                 upstreamRequest,
                 HttpCompletionOption.ResponseHeadersRead,
                 context.RequestAborted);
+            LogResponse(context, upstream, upstreamResponse, chatStartedAt, logTraffic, "Chat Completions");
         }
         catch (OperationCanceledException) when (!context.RequestAborted.IsCancellationRequested)
         {
@@ -144,6 +158,44 @@ static class ResponsesCompatibility
         statusCode is System.Net.HttpStatusCode.NotFound
             or System.Net.HttpStatusCode.MethodNotAllowed
             or System.Net.HttpStatusCode.NotImplemented;
+
+    private static void LogRequest(HttpContext context, GatewayEndpoint upstream, string endpoint, JsonObject body, bool logTraffic, string protocol)
+    {
+        if (!logTraffic)
+        {
+            return;
+        }
+
+        Console.WriteLine($"[{Timestamp()}] [{context.TraceIdentifier}] [发往上游] endpoint={upstream.Name}, protocol={protocol}, POST {upstream.NormalizedBaseUrl}{endpoint}");
+        Console.WriteLine($"[{context.TraceIdentifier}] [发往上游体] {body.ToJsonString()}");
+    }
+
+    private static void LogResponse(HttpContext context, GatewayEndpoint upstream, HttpResponseMessage response, long startedAt, bool logTraffic, string protocol)
+    {
+        if (!logTraffic)
+        {
+            return;
+        }
+
+        Console.WriteLine($"[{Timestamp()}] [{context.TraceIdentifier}] [上游响应] endpoint={upstream.Name}, protocol={protocol}, status={(int)response.StatusCode} {response.StatusCode}, elapsed={Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds:0}ms");
+        Console.WriteLine($"[{context.TraceIdentifier}] [上游响应头] {FormatHeaders(response.Headers, response.Content.Headers)}");
+    }
+
+    private static string Timestamp() => DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+
+    private static string FormatHeaders(params IEnumerable<KeyValuePair<string, IEnumerable<string>>>?[] headerGroups) =>
+        string.Join("; ", headerGroups
+            .Where(group => group is not null)
+            .SelectMany(group => group!)
+            .Select(header => $"{header.Key}: {FormatHeaderValue(header.Key, header.Value)}"));
+
+    private static string FormatHeaderValue(string name, IEnumerable<string> values) =>
+        name.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("x-goog-api-key", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("x-api-key", StringComparison.OrdinalIgnoreCase)
+            ? "[redacted]"
+            : string.Join(", ", values);
 
     private static async Task<HttpResponseMessage> SendAsync(
         HttpContext context,

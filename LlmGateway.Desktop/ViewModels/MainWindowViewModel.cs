@@ -356,8 +356,7 @@ public sealed class MainWindowViewModel : ObservableObject
             EnvironmentKey = EndpointNormalizer.GetEnvironmentKey(endpoint);
             await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
             await RestartGatewayIfRunningAsync();
-            await _environmentService.SaveAsync("OPENAI_BASE_URL", LocalGatewayBaseUrl);
-            await _environmentService.SaveAsync("OPENAI_API_KEY", GatewayApiKey);
+            await SaveGatewayClientEnvironmentAsync();
             await _codexConfig.SaveAsync(CurrentCodexSettings());
             await _codexStateService.SynchronizeModelProviderAsync(Provider);
             var authResult = await _codexAuth.EnsureAsync();
@@ -388,8 +387,7 @@ public sealed class MainWindowViewModel : ObservableObject
             EnsureGatewayPortIsAvailable();
             ApplyEndpointIdentity(UpstreamBaseUrl);
             await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
-            await _environmentService.SaveAsync("OPENAI_BASE_URL", LocalGatewayBaseUrl);
-            await _environmentService.SaveAsync("OPENAI_API_KEY", GatewayApiKey);
+            await SaveGatewayClientEnvironmentAsync();
             await _codexConfig.SaveAsync(CurrentCodexSettings());
             await _gatewayServiceManager.StartAsync();
             IsGatewayRunning = true;
@@ -480,7 +478,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         GatewayApiKey = GatewayEndpoint.CreateGatewayApiKey();
         await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
-        await _environmentService.SaveAsync("OPENAI_API_KEY", GatewayApiKey);
+        await SaveGatewayClientEnvironmentAsync();
         GatewayStatus = "已生成新的本地网关 API Key，请同步更新客户端配置。";
     }
 
@@ -535,8 +533,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             ApplyEndpointIdentity(UpstreamBaseUrl);
             await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
-            await _environmentService.SaveAsync("OPENAI_BASE_URL", LocalGatewayBaseUrl);
-            await _environmentService.SaveAsync("OPENAI_API_KEY", GatewayApiKey);
+            await SaveGatewayClientEnvironmentAsync();
             await _codexConfig.SaveAsync(CurrentCodexSettings());
         }
         catch (Exception exception)
@@ -544,6 +541,15 @@ public sealed class MainWindowViewModel : ObservableObject
             LogError("同步本地网关客户端配置", exception);
             CodexStatus = $"同步本地网关配置失败：{exception.Message}";
         }
+    }
+
+    private async Task SaveGatewayClientEnvironmentAsync()
+    {
+        var primaryTextGroup = GetRequiredPrimaryModelGroup(TextModelGroups, "文字");
+        var providerEnvironmentKey = EndpointNormalizer.GetEnvironmentKey(primaryTextGroup.BaseUrl);
+        await _environmentService.SaveAsync("OPENAI_BASE_URL", LocalGatewayBaseUrl);
+        await _environmentService.SaveAsync("OPENAI_API_KEY", GatewayApiKey);
+        await _environmentService.SaveAsync(providerEnvironmentKey, GatewayApiKey);
     }
 
     private async Task FetchModelsAsync()

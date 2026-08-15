@@ -1,14 +1,20 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 
 public sealed class EndpointForwarder(IHttpClientFactory httpClientFactory, ModelRegistry modelRegistry)
 {
-    public async Task ForwardAsync(HttpContext context, IReadOnlyDictionary<string, string> extraHeaders, IReadOnlyDictionary<string, string> endpointMappings, CancellationToken cancellationToken)
+    public async Task ForwardAsync(HttpContext context, IReadOnlyDictionary<string, string> extraHeaders, IReadOnlyDictionary<string, string> endpointMappings, bool logTraffic, CancellationToken cancellationToken)
     {
         var body = await ReadBodyAsync(context.Request, cancellationToken);
         var model = GetModel(body);
         var candidates = modelRegistry.GetCandidates(model);
+        if (logTraffic)
+        {
+            Console.WriteLine($"[{Timestamp()}] [{context.TraceIdentifier}] [路由] model={model ?? "<none>"}, candidates={string.Join(", ", candidates.Select(endpoint => endpoint.Name))}");
+        }
         if (candidates.Count == 0)
         {
             await WriteErrorAsync(context, StatusCodes.Status503ServiceUnavailable, "没有可用的上游 Endpoint。请先配置并等待模型列表刷新。", "no_upstream");
@@ -21,14 +27,28 @@ public sealed class EndpointForwarder(IHttpClientFactory httpClientFactory, Mode
         {
             try
             {
-                response = await SendAsync(context.Request, endpoint, body, extraHeaders, endpointMappings, cancellationToken);
+                var startedAt = Stopwatch.GetTimestamp();
+                response = await SendAsync(context, endpoint, body, extraHeaders, endpointMappings, logTraffic, cancellationToken);
+                if (logTraffic)
+                {
+                    Console.WriteLine($"[{Timestamp()}] [{context.TraceIdentifier}] [上游响应] endpoint={endpoint.Name}, status={(int)response.StatusCode} {response.StatusCode}, elapsed={Elapsed(startedAt)}");
+                    Console.WriteLine($"[{context.TraceIdentifier}] [上游响应头] {FormatHeaders(response.Headers, response.Content.Headers)}");
+                }
             }
-            catch (HttpRequestException) when (!cancellationToken.IsCancellationRequested)
+            catch (HttpRequestException exception) when (!cancellationToken.IsCancellationRequested)
             {
+                if (logTraffic)
+                {
+                    Console.WriteLine($"[{Timestamp()}] [{context.TraceIdentifier}] [上游异常] endpoint={endpoint.Name}, type=HttpRequestException, message={exception.Message}");
+                }
                 continue;
             }
-            catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+            catch (TaskCanceledException exception) when (!cancellationToken.IsCancellationRequested)
             {
+                if (logTraffic)
+                {
+                    Console.WriteLine($"[{Timestamp()}] [{context.TraceIdentifier}] [上游超时] endpoint={endpoint.Name}, message={exception.Message}");
+                }
                 continue;
             }
 
@@ -38,6 +58,10 @@ public sealed class EndpointForwarder(IHttpClientFactory httpClientFactory, Mode
                 break;
             }
 
+            if (logTraffic)
+            {
+                Console.WriteLine($"[{Timestamp()}] [{context.TraceIdentifier}] [上游重试] endpoint={endpoint.Name}, status={(int)response.StatusCode} {response.StatusCode}");
+            }
             response.Dispose();
             response = null;
         }
@@ -59,8 +83,9 @@ public sealed class EndpointForwarder(IHttpClientFactory httpClientFactory, Mode
         }
     }
 
-    private async Task<HttpResponseMessage> SendAsync(HttpRequest request, GatewayEndpoint endpoint, byte[] body, IReadOnlyDictionary<string, string> extraHeaders, IReadOnlyDictionary<string, string> endpointMappings, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendAsync(HttpContext context, GatewayEndpoint endpoint, byte[] body, IReadOnlyDictionary<string, string> extraHeaders, IReadOnlyDictionary<string, string> endpointMappings, bool logTraffic, CancellationToken cancellationToken)
     {
+        var request = context.Request;
         var mappedPath = EndpointMapper.MapPath(request.Path, endpointMappings);
         var target = endpoint.BuildApiUri(mappedPath, request.QueryString.Value);
         var upstream = new HttpRequestMessage(new HttpMethod(request.Method), target);
@@ -92,8 +117,34 @@ public sealed class EndpointForwarder(IHttpClientFactory httpClientFactory, Mode
         }
 
         upstream.Headers.Authorization = new AuthenticationHeaderValue("Bearer", endpoint.ApiKey);
+        if (logTraffic)
+        {
+            Console.WriteLine($"[{Timestamp()}] [{context.TraceIdentifier}] [发往上游] endpoint={endpoint.Name}, {request.Method} {target}");
+            Console.WriteLine($"[{context.TraceIdentifier}] [发往上游头] {FormatHeaders(upstream.Headers, upstream.Content?.Headers)}");
+            Console.WriteLine($"[{context.TraceIdentifier}] [发往上游体] {FormatBody(body)}");
+        }
         return await httpClientFactory.CreateClient("gateway-upstream").SendAsync(upstream, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     }
+
+    private static string Timestamp() => DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+
+    private static string Elapsed(long startedAt) => $"{Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds:0}ms";
+
+    private static string FormatBody(byte[] body) => body.Length == 0 ? "<empty>" : Encoding.UTF8.GetString(body);
+
+    private static string FormatHeaders(params IEnumerable<KeyValuePair<string, IEnumerable<string>>>?[] headerGroups) =>
+        string.Join("; ", headerGroups
+            .Where(group => group is not null)
+            .SelectMany(group => group!)
+            .Select(header => $"{header.Key}: {FormatHeaderValue(header.Key, header.Value)}"));
+
+    private static string FormatHeaderValue(string name, IEnumerable<string> values) =>
+        name.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("x-goog-api-key", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("x-api-key", StringComparison.OrdinalIgnoreCase)
+            ? "[redacted]"
+            : string.Join(", ", values);
 
     private static async Task<byte[]> ReadBodyAsync(HttpRequest request, CancellationToken cancellationToken)
     {
