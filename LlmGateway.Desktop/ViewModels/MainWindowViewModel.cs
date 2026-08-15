@@ -837,8 +837,8 @@ public sealed class MainWindowViewModel : ObservableObject
         DirectCodexBaseUrl = EndpointNormalizer.Normalize(CodexBaseUrl),
         LogTraffic = LogTraffic,
         EndpointMappings = new Dictionary<string, string>(_endpointMappings, StringComparer.OrdinalIgnoreCase),
-        TextModelGroups = TextModelGroups.Select(group => group.Clone()).ToList(),
-        ImageModelGroups = ImageModelGroups.Select(group => group.Clone()).ToList(),
+        TextModelGroups = TextModelGroups.Select(CloneNormalizedModelGroup).ToList(),
+        ImageModelGroups = ImageModelGroups.Select(CloneNormalizedModelGroup).ToList(),
         TextModels = Models.ToList(),
         ImageModels = ImageModels.ToList(),
         Endpoints = CurrentEndpoints(),
@@ -867,7 +867,7 @@ public sealed class MainWindowViewModel : ObservableObject
         var legacyEndpoint = settings.Endpoints.FirstOrDefault(endpoint => endpoint.Enabled)
             ?? settings.Endpoints.FirstOrDefault();
         var legacyBaseUrl = string.IsNullOrWhiteSpace(legacyEndpoint?.BaseUrl)
-            ? (string.IsNullOrWhiteSpace(settings.DirectCodexBaseUrl) ? "https://api.ailili.chat/v1" : settings.DirectCodexBaseUrl)
+            ? (string.IsNullOrWhiteSpace(settings.DirectCodexBaseUrl) ? "https://api.ailili.chat" : settings.DirectCodexBaseUrl)
             : legacyEndpoint.BaseUrl;
         var legacyText = new ModelGroupSettings
         {
@@ -948,7 +948,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private static void ReplaceModelGroups(ObservableCollection<ModelGroupSettings> destination, IEnumerable<ModelGroupSettings> source)
     {
         destination.Clear();
-        foreach (var group in source.Select(group => group.Clone()))
+        foreach (var group in source.Select(CloneNormalizedModelGroup))
         {
             destination.Add(group);
         }
@@ -957,6 +957,13 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             destination[0].IsPrimary = true;
         }
+    }
+
+    private static ModelGroupSettings CloneNormalizedModelGroup(ModelGroupSettings group)
+    {
+        var copy = group.Clone();
+        copy.BaseUrl = EndpointNormalizer.Normalize(copy.BaseUrl);
+        return copy;
     }
 
     private static void RestoreMissingGroupApiKeys(IEnumerable<ModelGroupSettings> groups, IEnumerable<GatewayEndpointSettings> endpoints)

@@ -4,7 +4,14 @@ public static class EndpointNormalizer
 {
     public static string Normalize(string value)
     {
-        return value;
+        var trimmed = value.Trim().TrimEnd('/');
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri)
+            || !uri.AbsolutePath.Equals("/v1", StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed;
+        }
+
+        return new UriBuilder(uri) { Path = string.Empty }.Uri.ToString().TrimEnd('/');
     }
 
     public static string GetConfigurationName(string value)

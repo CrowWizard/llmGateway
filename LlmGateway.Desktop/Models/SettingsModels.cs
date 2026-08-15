@@ -6,7 +6,7 @@ namespace LlmGateway.Desktop.Models;
 public sealed class ModelGroupSettings : ObservableObject
 {
     private string _name = string.Empty;
-    private string _baseUrl = "https://api.ailili.chat/v1";
+    private string _baseUrl = "https://api.ailili.chat";
     private string _apiKey = string.Empty;
     private string _model = string.Empty;
     private bool _isPrimary;
@@ -45,7 +45,7 @@ public sealed class GatewaySettings
     public bool CompatibilityMode { get; set; }
     public string ResponsesMode { get; set; } = "Auto";
     public string GeminiImageApiKey { get; set; } = string.Empty;
-    public string DirectCodexBaseUrl { get; set; } = "https://api.ailili.chat/v1";
+    public string DirectCodexBaseUrl { get; set; } = "https://api.ailili.chat";
     public Dictionary<string, string> ExtraRequestHeaders { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Accept-Language"] = "zh-CN,zh;q=0.9,en;q=0.8"
@@ -95,7 +95,7 @@ public sealed class CodexSettings
 {
     public string Model { get; set; } = string.Empty;
     public string Provider { get; set; } = "dzdy";
-    public string BaseUrl { get; set; } = "https://api.ailili.chat/v1";
+    public string BaseUrl { get; set; } = "https://api.ailili.chat";
     public string EnvironmentKey { get; set; } = "DZDY_API_KEY";
 }
 
