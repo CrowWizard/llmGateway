@@ -27,6 +27,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly ErrorLogService _errorLogService;
     private readonly AsyncCommand _startGatewayCommand;
     private readonly AsyncCommand _stopGatewayCommand;
+    private readonly AsyncCommand _installGatewayServiceCommand;
+    private readonly AsyncCommand _toggleGatewayServiceCommand;
 
     private string _localBindIp = "127.0.0.1";
     private int _listenPort = 23001;
@@ -54,6 +56,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private double _nodeInstallProgress;
     private string _nodeInstallStatus = string.Empty;
     private bool _isApiKeyVisible;
+    private bool _isServiceInstalled;
+    private bool _isServiceAutomaticStart;
 
     public MainWindowViewModel(
         AppPaths paths,
@@ -88,12 +92,17 @@ public sealed class MainWindowViewModel : ObservableObject
         _nodeRuntimeService = nodeRuntimeService;
         _errorLogService = errorLogService;
 
-        _startGatewayCommand = new AsyncCommand(StartGatewayAsync, () => !IsGatewayRunning);
+        _startGatewayCommand = new AsyncCommand(StartGatewayAsync, () => IsServiceInstalled && !IsGatewayRunning);
         _stopGatewayCommand = new AsyncCommand(StopGatewayAsync, () => IsGatewayRunning);
+        _installGatewayServiceCommand = new AsyncCommand(ToggleGatewayServiceInstallationAsync);
+        _toggleGatewayServiceCommand = new AsyncCommand(ToggleGatewayServiceAsync, () => IsServiceInstalled);
         StartGatewayCommand = _startGatewayCommand;
         StopGatewayCommand = _stopGatewayCommand;
-        InstallGatewayServiceCommand = new AsyncCommand(InstallGatewayServiceAsync);
+        InstallGatewayServiceCommand = _installGatewayServiceCommand;
         UninstallGatewayServiceCommand = new AsyncCommand(UninstallGatewayServiceAsync);
+        ToggleGatewayServiceCommand = _toggleGatewayServiceCommand;
+        RegenerateGatewayApiKeyCommand = new AsyncCommand(RegenerateGatewayApiKeyAsync);
+        ToggleAutomaticStartCommand = new AsyncCommand(ToggleAutomaticStartAsync, () => IsServiceInstalled);
         RefreshGatewayStatusCommand = new AsyncCommand(RefreshGatewayStatusAsync);
         SaveConfigurationCommand = new AsyncCommand(SaveConfigurationAsync);
         FetchModelsCommand = new AsyncCommand(FetchModelsAsync);
@@ -138,6 +147,9 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand StopGatewayCommand { get; }
     public AsyncCommand InstallGatewayServiceCommand { get; }
     public AsyncCommand UninstallGatewayServiceCommand { get; }
+    public AsyncCommand ToggleGatewayServiceCommand { get; }
+    public AsyncCommand RegenerateGatewayApiKeyCommand { get; }
+    public AsyncCommand ToggleAutomaticStartCommand { get; }
     public AsyncCommand RefreshGatewayStatusCommand { get; }
     public AsyncCommand SaveConfigurationCommand { get; }
     public AsyncCommand FetchModelsCommand { get; }
@@ -211,11 +223,41 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 _startGatewayCommand.RaiseCanExecuteChanged();
                 _stopGatewayCommand.RaiseCanExecuteChanged();
+                _startGatewayCommand.RaiseCanExecuteChanged();
+                OnPropertyChanged(nameof(ServiceActionText));
                 OnPropertyChanged(nameof(GatewayStateText));
             }
         }
     }
     public string GatewayStateText => IsGatewayRunning ? "运行中" : "已停止";
+    public bool IsServiceInstalled
+    {
+        get => _isServiceInstalled;
+        private set
+        {
+            if (SetProperty(ref _isServiceInstalled, value))
+            {
+                _startGatewayCommand.RaiseCanExecuteChanged();
+                _toggleGatewayServiceCommand.RaiseCanExecuteChanged();
+                ToggleAutomaticStartCommand.RaiseCanExecuteChanged();
+                OnPropertyChanged(nameof(ServiceInstallText));
+            }
+        }
+    }
+    public bool IsServiceAutomaticStart
+    {
+        get => _isServiceAutomaticStart;
+        private set
+        {
+            if (SetProperty(ref _isServiceAutomaticStart, value))
+            {
+                OnPropertyChanged(nameof(AutomaticStartText));
+            }
+        }
+    }
+    public string ServiceInstallText => IsServiceInstalled ? "卸载服务" : "安装服务";
+    public string ServiceActionText => IsGatewayRunning ? "关闭服务" : "强启动服务";
+    public string AutomaticStartText => IsServiceAutomaticStart ? "服务随系统启动：已开启" : "服务随系统启动：已关闭";
     public string ApiKey { get => _apiKey; set => SetProperty(ref _apiKey, value); }
     public string ImageApiKey { get => _imageApiKey; set => SetProperty(ref _imageApiKey, value); }
     public string ImageGenerationStatus { get => _imageGenerationStatus; private set => SetProperty(ref _imageGenerationStatus, value); }
@@ -362,6 +404,18 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    private async Task ToggleGatewayServiceAsync()
+    {
+        if (IsGatewayRunning)
+        {
+            await StopGatewayAsync();
+        }
+        else
+        {
+            await StartGatewayAsync();
+        }
+    }
+
     private async Task StopGatewayAsync()
     {
         try
@@ -393,6 +447,43 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    private async Task ToggleGatewayServiceInstallationAsync()
+    {
+        if (IsServiceInstalled)
+        {
+            await UninstallGatewayServiceAsync();
+        }
+        else
+        {
+            await InstallGatewayServiceAsync();
+        }
+    }
+
+    private async Task ToggleAutomaticStartAsync()
+    {
+        try
+        {
+            var currentStatus = await _gatewayServiceManager.GetServiceStatusAsync();
+            var enabled = !currentStatus.IsAutomaticStart;
+            await _gatewayServiceManager.SetAutomaticStartAsync(enabled);
+            IsServiceAutomaticStart = enabled;
+            GatewayStatus = enabled ? "Windows 服务已设置为随系统启动。" : "Windows 服务已取消随系统启动。";
+        }
+        catch (Exception exception)
+        {
+            LogError("设置服务启动方式", exception);
+            GatewayStatus = $"设置服务启动方式失败：{exception.Message}";
+        }
+    }
+
+    private async Task RegenerateGatewayApiKeyAsync()
+    {
+        GatewayApiKey = GatewayEndpoint.CreateGatewayApiKey();
+        await _gatewaySettingsService.SaveAsync(CurrentGatewaySettings());
+        await _environmentService.SaveAsync("OPENAI_API_KEY", GatewayApiKey);
+        GatewayStatus = "已生成新的本地网关 API Key，请同步更新客户端配置。";
+    }
+
     private async Task UninstallGatewayServiceAsync()
     {
         try
@@ -412,9 +503,11 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         try
         {
-            var status = await _gatewayServiceManager.GetStatusAsync();
-            IsGatewayRunning = status.Contains("运行中", StringComparison.Ordinal);
-            GatewayStatus = status;
+            var status = await _gatewayServiceManager.GetServiceStatusAsync();
+            IsServiceInstalled = status.IsInstalled;
+            IsServiceAutomaticStart = status.IsAutomaticStart;
+            IsGatewayRunning = status.IsRunning;
+            GatewayStatus = status.DisplayText;
         }
         catch (Exception exception)
         {

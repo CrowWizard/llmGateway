@@ -4,15 +4,34 @@ namespace LlmGateway.Desktop.Services;
 
 public sealed class GatewayServiceManager(AppPaths paths)
 {
-    public async Task<string> GetStatusAsync(CancellationToken cancellationToken = default)
+    public sealed record ServiceStatus(bool IsInstalled, bool IsRunning, bool IsAutomaticStart)
+    {
+        public string DisplayText => !IsInstalled
+            ? "Windows 服务未安装"
+            : IsRunning
+                ? "Windows 服务运行中"
+                : "Windows 服务已停止";
+    }
+
+    public async Task<ServiceStatus> GetServiceStatusAsync(CancellationToken cancellationToken = default)
     {
         EnsureWindows();
-        var result = await RunScAsync($"query \"{paths.GatewayServiceName}\"", cancellationToken);
-        return result.ExitCode == 0 && result.Output.Contains("RUNNING", StringComparison.OrdinalIgnoreCase)
-            ? "Windows 服务运行中"
-            : result.ExitCode == 0
-                ? "Windows 服务已停止"
-                : "Windows 服务未安装";
+        var query = await RunScAsync($"query \"{paths.GatewayServiceName}\"", cancellationToken);
+        if (query.ExitCode != 0)
+        {
+            return new ServiceStatus(false, false, false);
+        }
+
+        var config = await RunScAsync($"qc \"{paths.GatewayServiceName}\"", cancellationToken);
+        return new ServiceStatus(
+            true,
+            query.Output.Contains("RUNNING", StringComparison.OrdinalIgnoreCase),
+            config.Output.Contains("AUTO_START", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public async Task<string> GetStatusAsync(CancellationToken cancellationToken = default)
+    {
+        return (await GetServiceStatusAsync(cancellationToken)).DisplayText;
     }
 
     public async Task InstallAsync(CancellationToken cancellationToken = default)
@@ -33,6 +52,11 @@ public sealed class GatewayServiceManager(AppPaths paths)
 
     public Task StopAsync(CancellationToken cancellationToken = default) =>
         EnsureSuccessAsync($"stop \"{paths.GatewayServiceName}\"", cancellationToken, allowAlreadyStopped: true);
+
+    public Task SetAutomaticStartAsync(bool enabled, CancellationToken cancellationToken = default) =>
+        EnsureSuccessAsync(
+            $"config \"{paths.GatewayServiceName}\" start= {(enabled ? "auto" : "demand")}",
+            cancellationToken);
 
     public async Task RestartAsync(CancellationToken cancellationToken = default)
     {

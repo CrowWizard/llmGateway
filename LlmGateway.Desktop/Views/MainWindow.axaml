@@ -153,6 +153,13 @@
                 </StackPanel>
                 <CheckBox Grid.Column="1" IsChecked="{Binding LogTraffic}" Content="记录代理流量" VerticalAlignment="Bottom" />
               </Grid>
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <StackPanel Spacing="6">
+                    <TextBlock Classes="caption" Text="本地 Gateway API Key" />
+                    <TextBox Text="{Binding GatewayApiKey}" IsReadOnly="True" PasswordChar="●" RevealPassword="{Binding IsApiKeyVisible}" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Classes="ghost" Command="{Binding RegenerateGatewayApiKeyCommand}" Content="重新生成 Key" VerticalAlignment="Bottom" />
+                </Grid>
               <StackPanel Spacing="6">
                 <TextBlock Classes="caption" Text="Responses 映射" />
                 <ComboBox SelectedItem="{Binding ResponsesMode}" IsEditable="True">
@@ -170,12 +177,11 @@
                 <TextBlock Classes="caption" Text="Gemini Image API Key" />
                 <TextBox Text="{Binding GeminiImageApiKey}" PasswordChar="●" RevealPassword="{Binding IsApiKeyVisible}" PlaceholderText="输入 Gemini Image API Key" />
               </StackPanel>
-              <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="8">
-                <Button Classes="secondary" Command="{Binding StartGatewayCommand}" Content="启动服务" />
-                <Button Grid.Column="1" Classes="secondary" Command="{Binding StopGatewayCommand}" Content="停止服务" />
-                <Button Grid.Column="2" Classes="ghost" Command="{Binding InstallGatewayServiceCommand}" Content="安装服务" />
-                <Button Grid.Column="3" Classes="ghost" Command="{Binding UninstallGatewayServiceCommand}" Content="卸载服务" />
-                <Button Grid.Column="4" HorizontalAlignment="Right" Classes="ghost" Command="{Binding RefreshGatewayStatusCommand}" Content="刷新状态" />
+              <Grid ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8">
+                <Button Classes="secondary" Command="{Binding ToggleGatewayServiceCommand}" Content="{Binding ServiceActionText}" />
+                <Button Grid.Column="1" Classes="ghost" Command="{Binding InstallGatewayServiceCommand}" Content="{Binding ServiceInstallText}" />
+                <CheckBox Grid.Column="2" IsChecked="{Binding IsServiceAutomaticStart, Mode=OneWay}" Command="{Binding ToggleAutomaticStartCommand}" Content="随系统启动" IsEnabled="{Binding IsServiceInstalled}" VerticalAlignment="Center" />
+                <Button Grid.Column="3" HorizontalAlignment="Right" Classes="ghost" Command="{Binding RefreshGatewayStatusCommand}" Content="刷新状态" />
               </Grid>
               <TextBlock Classes="caption" Text="{Binding GatewayStatus}" TextWrapping="Wrap" />
             </StackPanel>
