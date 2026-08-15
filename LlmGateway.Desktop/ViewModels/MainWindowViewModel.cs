@@ -55,7 +55,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _isNodeInstalling;
     private double _nodeInstallProgress;
     private string _nodeInstallStatus = string.Empty;
-    private bool _isApiKeyVisible;
+    private bool _isApiKeyVisible = true;
     private bool _isServiceInstalled;
     private bool _isServiceAutomaticStart;
 
@@ -838,6 +838,7 @@ public sealed class MainWindowViewModel : ObservableObject
         TextModelGroups = TextModelGroups.Select(group => group.Clone()).ToList(),
         ImageModelGroups = ImageModelGroups.Select(group => group.Clone()).ToList(),
         Endpoints = CurrentEndpoints(),
+        TrafficLogDirectory = _paths.CodexLogDirectory,
         ExtraRequestHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["Accept-Language"] = "zh-CN,zh;q=0.9,en;q=0.8"
@@ -882,7 +883,15 @@ public sealed class MainWindowViewModel : ObservableObject
         };
         ReplaceModelGroups(TextModelGroups, settings.TextModelGroups.Count > 0 ? settings.TextModelGroups : [legacyText]);
         ReplaceModelGroups(ImageModelGroups, settings.ImageModelGroups.Count > 0 ? settings.ImageModelGroups : [legacyImage]);
+        RestoreMissingGroupApiKeys(TextModelGroups, settings.Endpoints);
+        RestoreMissingGroupApiKeys(ImageModelGroups, settings.Endpoints);
         var primaryTextGroup = GetRequiredPrimaryModelGroup(TextModelGroups, "文字");
+        if (string.IsNullOrWhiteSpace(primaryTextGroup.Model))
+        {
+            primaryTextGroup.Model = Model;
+        }
+        RestoreSavedModels(Models, TextModelGroups);
+        RestoreSavedModels(ImageModels, ImageModelGroups);
         UpstreamBaseUrl = EndpointNormalizer.Normalize(primaryTextGroup.BaseUrl);
         ApplyEndpointIdentity(UpstreamBaseUrl);
         ResponsesMode = settings.ResponsesMode;
@@ -946,6 +955,37 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    private static void RestoreMissingGroupApiKeys(IEnumerable<ModelGroupSettings> groups, IEnumerable<GatewayEndpointSettings> endpoints)
+    {
+        var configuredEndpoints = endpoints.ToArray();
+        foreach (var group in groups.Where(group => string.IsNullOrWhiteSpace(group.ApiKey)))
+        {
+            var endpoint = configuredEndpoints.FirstOrDefault(endpoint =>
+                string.Equals(
+                    EndpointNormalizer.Normalize(endpoint.BaseUrl),
+                    EndpointNormalizer.Normalize(group.BaseUrl),
+                    StringComparison.OrdinalIgnoreCase));
+            if (endpoint is not null)
+            {
+                group.ApiKey = endpoint.ApiKey;
+            }
+        }
+    }
+
+    private static void RestoreSavedModels(ObservableCollection<string> destination, IEnumerable<ModelGroupSettings> groups)
+    {
+        foreach (var model in groups
+                     .Select(group => group.Model.Trim())
+                     .Where(model => !string.IsNullOrWhiteSpace(model))
+                     .Distinct(StringComparer.Ordinal))
+        {
+            if (!destination.Contains(model, StringComparer.Ordinal))
+            {
+                destination.Add(model);
+            }
+        }
+    }
+
     private static void ValidateModelGroups(IEnumerable<ModelGroupSettings> groups, string category)
     {
         var configured = groups.ToArray();
@@ -962,7 +1002,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         if (configured.Count(group => group.IsPrimary) != 1)
         {
-            throw new InvalidOperationException($"{category}模型必须且只能设置一组为主用。" );
+            throw new InvalidOperationException($"{category}模型必须且只能设置一组为默认。" );
         }
         if (configured.GroupBy(group => $"{EndpointNormalizer.Normalize(group.BaseUrl).TrimEnd('/')}\n{group.ApiKey.Trim()}", StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
         {

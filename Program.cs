@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Net.Http.Headers;
@@ -14,6 +15,7 @@ if (args.Contains("--service", StringComparer.OrdinalIgnoreCase))
 // 读取 Gateway 配置。
 var gateway = builder.Configuration.GetSection("Gateway");
 var logTraffic = gateway.GetValue("LogTraffic", true);
+GatewayTrafficFileLog.Configure(logTraffic, gateway["TrafficLogDirectory"]);
 var responsesMode = gateway["ResponsesMode"] ?? "Auto";
 var gatewayApiKey = gateway["ApiKey"]?.Trim();
 if (string.IsNullOrWhiteSpace(gatewayApiKey))
@@ -299,6 +301,61 @@ static class TrafficLogging
             var text = System.Text.Encoding.UTF8.GetString(data);
             Console.WriteLine($"[{requestId}] [接收上游体] {text}");
             Console.WriteLine($"[{requestId}] [返回客户端体] {text}");
+        }
+    }
+}
+
+static class GatewayTrafficFileLog
+{
+    public static void Configure(bool enabled, string? configuredDirectory)
+    {
+        if (!enabled)
+        {
+            return;
+        }
+
+        var directory = string.IsNullOrWhiteSpace(configuredDirectory)
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".codex",
+                "logs")
+            : configuredDirectory;
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "gateway-traffic.log");
+        Console.SetOut(new TeeTextWriter(Console.Out, path));
+    }
+}
+
+sealed class TeeTextWriter(TextWriter console, string path) : TextWriter
+{
+    private readonly object _sync = new();
+
+    public override Encoding Encoding => console.Encoding;
+
+    public override void Write(char value)
+    {
+        lock (_sync)
+        {
+            console.Write(value);
+            File.AppendAllText(path, value.ToString(), Encoding.UTF8);
+        }
+    }
+
+    public override void Write(string? value)
+    {
+        lock (_sync)
+        {
+            console.Write(value);
+            File.AppendAllText(path, value, Encoding.UTF8);
+        }
+    }
+
+    public override void WriteLine(string? value)
+    {
+        lock (_sync)
+        {
+            console.WriteLine(value);
+            File.AppendAllText(path, (value ?? string.Empty) + Environment.NewLine, Encoding.UTF8);
         }
     }
 }

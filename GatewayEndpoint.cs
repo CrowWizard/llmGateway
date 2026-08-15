@@ -33,5 +33,5 @@ public sealed class GatewayEndpoint
             || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         && !string.IsNullOrWhiteSpace(ApiKey);
 
-    public static string CreateGatewayApiKey() => $"sk-{Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant()}";
+    public static string CreateGatewayApiKey() => $"sk-{Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant()}";
 }

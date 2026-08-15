@@ -22,6 +22,7 @@ public sealed class AppPaths
     public string BackupDirectory => Path.Combine(CodexDirectory, "bak");
     public string StateBackupDirectory => Path.Combine(BackupDirectory, "state");
     public string CodexTemporaryDirectory => Path.Combine(CodexDirectory, "temp");
+    public string CodexLogDirectory => Path.Combine(CodexDirectory, "logs");
     public string CodexSkillsDirectory => Path.Combine(CodexDirectory, "skills");
     public string NodeRuntimeSkillDirectory => Path.Combine(CodexSkillsDirectory, "noderuntime");
     public string NodeRuntimeDirectory => Path.Combine(NodeRuntimeSkillDirectory, "runtime");

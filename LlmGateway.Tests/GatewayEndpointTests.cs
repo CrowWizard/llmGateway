@@ -34,6 +34,6 @@ public sealed class GatewayEndpointTests
     {
         var key = GatewayEndpoint.CreateGatewayApiKey();
 
-        Assert.Matches("^sk-[0-9a-f]{64}$", key);
+        Assert.Matches("^sk-[0-9a-f]{48}$", key);
     }
 }

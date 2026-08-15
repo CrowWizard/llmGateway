@@ -47,12 +47,12 @@
             <StackPanel Spacing="20">
               <StackPanel Spacing="4">
                 <TextBlock Classes="section-title" Text="文字模型" />
-                <TextBlock Classes="caption" Text="用于 Codex 对话、代码生成和模型访问。每类模型只能选择一组主用配置。" TextWrapping="Wrap" />
+                <TextBlock Classes="caption" Text="用于 Codex 对话、代码生成和模型访问。每类模型只能选择一组默认配置。" TextWrapping="Wrap" />
               </StackPanel>
               <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                 <TextBlock Classes="caption" Text="文字模型配置列表" VerticalAlignment="Center" />
                 <Button Grid.Column="1" Classes="secondary" Command="{Binding FetchModelsCommand}" Content="验证并获取主用模型" />
-                <Button Grid.Column="2" Classes="secondary" Command="{Binding AddTextModelGroupCommand}" Content="添加文字配置" />
+                <Button Grid.Column="2" Classes="secondary" Command="{Binding AddTextModelGroupCommand}" Content="添加文字模型" />
               </Grid>
               <ItemsControl ItemsSource="{Binding TextModelGroups}">
                 <ItemsControl.DataTemplates>
@@ -61,13 +61,12 @@
                       <StackPanel Spacing="10">
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                           <TextBox Text="{Binding Name}" PlaceholderText="配置名称" />
-                          <Button Grid.Column="1" Classes="secondary" Command="{Binding $parent[Window].DataContext.SetPrimaryTextModelGroupCommand}" CommandParameter="{Binding}" Content="设为主用" />
+                          <RadioButton Grid.Column="1" GroupName="text-default-model-group" IsChecked="{Binding IsPrimary, Mode=OneWay}" Command="{Binding $parent[Window].DataContext.SetPrimaryTextModelGroupCommand}" CommandParameter="{Binding}" Content="默认" VerticalAlignment="Center" />
                           <Button Grid.Column="2" Classes="ghost" Command="{Binding $parent[Window].DataContext.RemoveTextModelGroupCommand}" CommandParameter="{Binding}" Content="删除" />
                         </Grid>
-                        <TextBlock Classes="caption" Text="{Binding IsPrimary, StringFormat='主用：{0}'}" />
                         <TextBox Text="{Binding BaseUrl}" PlaceholderText="https://api.ailili.chat/v1" />
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-                          <TextBox Text="{Binding ApiKey}" PasswordChar="●" PlaceholderText="API Key" />
+                          <TextBox Text="{Binding ApiKey}" PasswordChar="●" RevealPassword="{Binding $parent[Window].DataContext.IsApiKeyVisible}" PlaceholderText="API Key" />
                           <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[Window].DataContext.Models}" SelectedItem="{Binding Model}" IsEditable="True" PlaceholderText="模型" />
                         </Grid>
                       </StackPanel>
@@ -86,7 +85,7 @@
               <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                 <TextBlock Classes="caption" Text="生图模型配置列表" VerticalAlignment="Center" />
                 <Button Grid.Column="1" Classes="secondary" Command="{Binding FetchImageModelsCommand}" Content="获取主用生图模型" />
-                <Button Grid.Column="2" Classes="secondary" Command="{Binding AddImageModelGroupCommand}" Content="添加生图配置" />
+                <Button Grid.Column="2" Classes="secondary" Command="{Binding AddImageModelGroupCommand}" Content="添加生图模型" />
               </Grid>
               <ItemsControl ItemsSource="{Binding ImageModelGroups}">
                 <ItemsControl.DataTemplates>
@@ -95,13 +94,12 @@
                       <StackPanel Spacing="10">
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                           <TextBox Text="{Binding Name}" PlaceholderText="配置名称" />
-                          <Button Grid.Column="1" Classes="secondary" Command="{Binding $parent[Window].DataContext.SetPrimaryImageModelGroupCommand}" CommandParameter="{Binding}" Content="设为主用" />
+                          <RadioButton Grid.Column="1" GroupName="image-default-model-group" IsChecked="{Binding IsPrimary, Mode=OneWay}" Command="{Binding $parent[Window].DataContext.SetPrimaryImageModelGroupCommand}" CommandParameter="{Binding}" Content="默认" VerticalAlignment="Center" />
                           <Button Grid.Column="2" Classes="ghost" Command="{Binding $parent[Window].DataContext.RemoveImageModelGroupCommand}" CommandParameter="{Binding}" Content="删除" />
                         </Grid>
-                        <TextBlock Classes="caption" Text="{Binding IsPrimary, StringFormat='主用：{0}'}" />
                         <TextBox Text="{Binding BaseUrl}" PlaceholderText="https://api.ailili.chat/v1" />
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-                          <TextBox Text="{Binding ApiKey}" PasswordChar="●" PlaceholderText="API Key" />
+                          <TextBox Text="{Binding ApiKey}" PasswordChar="●" RevealPassword="{Binding $parent[Window].DataContext.IsApiKeyVisible}" PlaceholderText="API Key" />
                           <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[Window].DataContext.ImageModels}" SelectedItem="{Binding Model}" IsEditable="True" PlaceholderText="生图模型" />
                         </Grid>
                       </StackPanel>
@@ -169,15 +167,6 @@
                   <x:String>Responses</x:String>
                   <x:String>ChatCompletions</x:String>
                 </ComboBox>
-              </StackPanel>
-              <Border Height="1" Background="{DynamicResource BorderSubtleBrush}" />
-              <StackPanel Spacing="4">
-                <TextBlock Classes="section-title" Text="Gemini Image" />
-                <TextBlock Classes="caption" Text="Gemini 原生图片请求使用独立密钥。" TextWrapping="Wrap" />
-              </StackPanel>
-              <StackPanel Spacing="6">
-                <TextBlock Classes="caption" Text="Gemini Image API Key" />
-                <TextBox Text="{Binding GeminiImageApiKey}" PasswordChar="●" RevealPassword="{Binding IsApiKeyVisible}" PlaceholderText="输入 Gemini Image API Key" />
               </StackPanel>
               <Grid ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8">
                 <Button Classes="secondary" Command="{Binding ToggleGatewayServiceCommand}" Content="{Binding ServiceActionText}" />

@@ -59,6 +59,7 @@ public sealed class GatewaySettings
     public List<ModelGroupSettings> ImageModelGroups { get; set; } = [];
     public List<GatewayEndpointSettings> Endpoints { get; set; } = [];
     public bool LogTraffic { get; set; }
+    public string TrafficLogDirectory { get; set; } = string.Empty;
 
     public GatewaySettings Clone() => new()
     {
@@ -81,7 +82,8 @@ public sealed class GatewaySettings
             ApiKey = endpoint.ApiKey,
             Enabled = endpoint.Enabled
         }).ToList(),
-        LogTraffic = LogTraffic
+        LogTraffic = LogTraffic,
+        TrafficLogDirectory = TrafficLogDirectory
     };
 }
 
