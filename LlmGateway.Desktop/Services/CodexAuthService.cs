@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using LlmGateway.Desktop.Models;
@@ -7,13 +6,17 @@ namespace LlmGateway.Desktop.Services;
 
 public sealed class CodexAuthService(AppPaths paths)
 {
-    private const string Alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 
     public string AuthPath => paths.CodexAuthPath;
 
-    public async Task<AuthResult> EnsureAsync(CancellationToken cancellationToken = default)
+    public async Task<AuthResult> EnsureAsync(string gatewayApiKey, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(gatewayApiKey))
+        {
+            throw new InvalidOperationException("Gateway API Key 不能为空。");
+        }
+
         var created = !File.Exists(AuthPath);
         var repaired = false;
         var placeholderCreated = false;
@@ -48,10 +51,9 @@ public sealed class CodexAuthService(AppPaths paths)
 
         if (auth["OPENAI_API_KEY"] is not JsonValue apiKey
             || !apiKey.TryGetValue<string>(out var value)
-            || string.IsNullOrWhiteSpace(value))
+            || value != gatewayApiKey)
         {
-            auth["OPENAI_API_KEY"] = CreatePlaceholder();
-            placeholderCreated = true;
+            auth["OPENAI_API_KEY"] = gatewayApiKey;
             changed = true;
         }
 
@@ -67,16 +69,4 @@ public sealed class CodexAuthService(AppPaths paths)
         return new AuthResult(created, repaired, placeholderCreated, backupPath);
     }
 
-    private static string CreatePlaceholder()
-    {
-        Span<byte> randomBytes = stackalloc byte[48];
-        RandomNumberGenerator.Fill(randomBytes);
-        return "sk-" + string.Create(48, randomBytes.ToArray(), static (characters, bytes) =>
-        {
-            for (var index = 0; index < characters.Length; index++)
-            {
-                characters[index] = Alphabet[bytes[index] % Alphabet.Length];
-            }
-        });
-    }
 }

@@ -26,34 +26,9 @@ public sealed partial class CodexConfigService(AppPaths paths)
             {
                 result.Model = model;
             }
-            else if (!inSection && IsKey(line, "model_provider") && TryReadQuotedValue(line, out var provider))
-            {
-                result.Provider = provider;
-            }
-        }
-
-        var targetSection = $"model_providers.{result.Provider}";
-        var currentSection = string.Empty;
-        foreach (var line in lines)
-        {
-            if (TryGetSection(line, out var section))
-            {
-                currentSection = section;
-                continue;
-            }
-
-            if (currentSection != targetSection)
-            {
-                continue;
-            }
-
-            if (IsKey(line, "base_url") && TryReadQuotedValue(line, out var baseUrl))
+            else if (!inSection && IsKey(line, "openai_base_url") && TryReadQuotedValue(line, out var baseUrl))
             {
                 result.BaseUrl = baseUrl;
-            }
-            else if (IsKey(line, "env_key") && TryReadQuotedValue(line, out var environmentKey))
-            {
-                result.EnvironmentKey = environmentKey;
             }
         }
 
@@ -72,21 +47,20 @@ public sealed partial class CodexConfigService(AppPaths paths)
         var kept = new List<string>();
         var inSection = false;
         var skipSection = false;
-        var targetSection = $"model_providers.{settings.Provider}";
 
         foreach (var line in SplitLines(input))
         {
             if (TryGetSection(line, out var section))
             {
                 inSection = true;
-                skipSection = section == targetSection;
+                skipSection = section.StartsWith("model_providers.", StringComparison.Ordinal);
                 if (skipSection)
                 {
                     continue;
                 }
             }
 
-            if (skipSection || (!inSection && (IsKey(line, "model") || IsKey(line, "model_provider"))))
+            if (skipSection || (!inSection && (IsKey(line, "model") || IsKey(line, "model_provider") || IsKey(line, "openai_base_url"))))
             {
                 continue;
             }
@@ -105,7 +79,7 @@ public sealed partial class CodexConfigService(AppPaths paths)
 
         var output = new StringBuilder();
         output.AppendLine($"model = \"{Escape(settings.Model)}\"");
-        output.AppendLine($"model_provider = \"{Escape(settings.Provider)}\"");
+        output.AppendLine($"openai_base_url = \"{Escape(settings.BaseUrl)}\"");
         if (kept.Count > 0)
         {
             output.AppendLine();
@@ -115,11 +89,6 @@ public sealed partial class CodexConfigService(AppPaths paths)
             }
         }
 
-        output.AppendLine();
-        output.AppendLine($"[model_providers.{settings.Provider}]");
-        output.AppendLine($"name = \"{Escape(settings.Provider)}\"");
-        output.AppendLine($"base_url = \"{Escape(settings.BaseUrl)}\"");
-        output.AppendLine($"env_key = \"{Escape(settings.EnvironmentKey)}\"");
         return output.ToString();
     }
 
@@ -159,17 +128,9 @@ public sealed partial class CodexConfigService(AppPaths paths)
         {
             throw new InvalidOperationException("模型不能为空。");
         }
-        if (!ProviderRegex().IsMatch(settings.Provider))
-        {
-            throw new InvalidOperationException("Provider 只能包含字母、数字、下划线或连字符。");
-        }
         if (!Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http"))
         {
             throw new InvalidOperationException("Base URL 必须是有效的 HTTP 或 HTTPS 地址。");
-        }
-        if (!ProviderRegex().IsMatch(settings.EnvironmentKey))
-        {
-            throw new InvalidOperationException("环境变量名只能包含字母、数字、下划线或连字符。");
         }
     }
 
@@ -181,6 +142,4 @@ public sealed partial class CodexConfigService(AppPaths paths)
     [GeneratedRegex("^\\s*[A-Za-z0-9_.-]+\\s*=\\s*\\\"((?:\\\\.|[^\\\"])*)\\\"", RegexOptions.CultureInvariant)]
     private static partial Regex QuotedValueRegex();
 
-    [GeneratedRegex("^[A-Za-z0-9_-]+$", RegexOptions.CultureInvariant)]
-    private static partial Regex ProviderRegex();
 }

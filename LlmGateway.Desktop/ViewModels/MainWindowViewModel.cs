@@ -361,7 +361,7 @@ public sealed class MainWindowViewModel : ObservableObject
             await SaveGatewayClientEnvironmentAsync();
             await _codexConfig.SaveAsync(CurrentCodexSettings());
             await _codexStateService.SynchronizeModelProviderAsync(Provider);
-            var authResult = await _codexAuth.EnsureAsync();
+            var authResult = await _codexAuth.EnsureAsync(GatewayApiKey);
             if (!hasExistingConfiguration)
             {
                 backup = _backupService.Create("原始配置").DisplayName;
@@ -370,7 +370,7 @@ public sealed class MainWindowViewModel : ObservableObject
             GatewayStatus = IsGatewayRunning
                 ? "全部配置已保存；网关服务已重启并应用新配置。"
                 : "全部配置已保存。";
-            CodexStatus = $"Codex 配置已保存；已保存配置：{backup}{(authResult.PlaceholderCreated ? "；已创建 auth.json 安全占位 Key" : string.Empty)}。";
+            CodexStatus = $"Codex 配置已保存；已保存配置：{backup}{(authResult.Repaired ? "；已修复 auth.json" : string.Empty)}。";
         }
         catch (Exception exception)
         {
