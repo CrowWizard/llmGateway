@@ -136,7 +136,7 @@
                 </StackPanel>
                 <TextBlock Grid.Column="1" Classes="caption" Text="{Binding GatewayStateText}" VerticalAlignment="Center" />
               </Grid>
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
                 <StackPanel Spacing="6">
                   <TextBlock Classes="caption" Text="上游 Base URL" />
                   <TextBox Text="{Binding UpstreamBaseUrl}" PlaceholderText="https://api.example.com" />
