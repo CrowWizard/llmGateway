@@ -33,7 +33,7 @@
 
           <Border Classes="card">
             <StackPanel Spacing="14">
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
                 <StackPanel Spacing="4">
                   <TextBlock Classes="section-title" Text="Ailili" />
                   <TextBlock Classes="caption" Text="在网站中手动注册、登录并创建所需 Key，然后填入下方连接配置。" TextWrapping="Wrap" />
@@ -144,6 +144,10 @@
                 <StackPanel Grid.Column="1" Width="130" Spacing="6">
                   <TextBlock Classes="caption" Text="监听端口" />
                   <NumericUpDown Minimum="1" Maximum="65535" Value="{Binding ListenPort}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Width="130" Spacing="6">
+                  <TextBlock Classes="caption" Text="OAuth issuer 端口" />
+                  <NumericUpDown Minimum="1" Maximum="65535" Value="{Binding OAuthPort}" />
                 </StackPanel>
               </Grid>
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">

@@ -32,6 +32,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private string _localBindIp = "127.0.0.1";
     private int _listenPort = 23001;
+    private int _oauthPort = 23002;
     private string _upstreamBaseUrl = string.Empty;
     private string _responsesMode = "Auto";
     private string _logLevel = "Error";
@@ -185,6 +186,7 @@ public sealed class MainWindowViewModel : ObservableObject
             }
         }
     }
+    public int OAuthPort { get => _oauthPort; set => SetProperty(ref _oauthPort, value); }
     public string UpstreamBaseUrl
     {
         get => _upstreamBaseUrl;
@@ -786,6 +788,16 @@ public sealed class MainWindowViewModel : ObservableObject
 
             ListenPort++;
         }
+
+        while (OAuthPort == ListenPort || !IsTcpPortAvailable(OAuthPort))
+        {
+            if (OAuthPort >= 65535)
+            {
+                throw new InvalidOperationException("找不到可用的本地 OAuth issuer 端口。");
+            }
+
+            OAuthPort++;
+        }
     }
 
     private static bool IsTcpPortAvailable(int port)
@@ -831,6 +843,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         LocalBindIp = LocalBindIp,
         ListenPort = ListenPort,
+        OAuthPort = OAuthPort,
         GatewayApiKey = GatewayApiKey,
         UpstreamBaseUrl = EndpointNormalizer.Normalize(UpstreamBaseUrl),
         CompatibilityMode = CompatibilityMode,
@@ -864,6 +877,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         LocalBindIp = settings.LocalBindIp;
         ListenPort = settings.ListenPort;
+        OAuthPort = settings.OAuthPort;
         GatewayApiKey = string.IsNullOrWhiteSpace(settings.GatewayApiKey)
             ? GatewayEndpoint.CreateGatewayApiKey()
             : settings.GatewayApiKey;

@@ -39,6 +39,7 @@ public sealed class GatewaySettings
 {
     public string LocalBindIp { get; set; } = "127.0.0.1";
     public int ListenPort { get; set; } = 23001;
+    public int OAuthPort { get; set; } = 23002;
     [JsonPropertyName("ApiKey")]
     public string GatewayApiKey { get; set; } = string.Empty;
     public string UpstreamBaseUrl { get; set; } = "https://api.ailili.chat";
@@ -68,6 +69,7 @@ public sealed class GatewaySettings
     {
         LocalBindIp = LocalBindIp,
         ListenPort = ListenPort,
+        OAuthPort = OAuthPort,
         GatewayApiKey = GatewayApiKey,
         UpstreamBaseUrl = UpstreamBaseUrl,
         CompatibilityMode = CompatibilityMode,

@@ -45,5 +45,7 @@
   <ItemGroup>
     <Compile Include="../ResponsesCompatibility.cs" Link="Gateway/ResponsesCompatibility.cs" />
     <Compile Include="../GatewayEndpoint.cs" Link="Gateway/GatewayEndpoint.cs" />
+    <Compile Include="../OAuthCompatibility.cs" Link="Gateway/OAuthCompatibility.cs" />
+    <Compile Include="../OAuthEndpoints.cs" Link="Gateway/OAuthEndpoints.cs" />
   </ItemGroup>
 </Project>

@@ -5,9 +5,13 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 
-var builder = WebApplication.CreateBuilder(args);
-builder.Host.UseContentRoot(AppContext.BaseDirectory);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory
+});
 if (args.Contains("--service", StringComparer.OrdinalIgnoreCase))
 {
     builder.Host.UseWindowsService();
@@ -30,6 +34,7 @@ if (string.IsNullOrWhiteSpace(gatewayApiKey))
 }
 var localBindIp = gateway["LocalBindIp"] ?? "127.0.0.1";
 var listenPort = gateway.GetValue("ListenPort", 3001);
+var oauthPort = gateway.GetValue("OAuthPort", listenPort + 1);
 var configuredListenPort = listenPort;
 while (!IsTcpPortAvailable(localBindIp, listenPort))
 {
@@ -46,8 +51,32 @@ if (listenPort != configuredListenPort)
     PersistListenPort(listenPort);
 }
 
+var configuredOAuthPort = oauthPort;
+while (oauthPort == listenPort || !IsTcpPortAvailable(localBindIp, oauthPort))
+{
+    if (oauthPort >= 65535)
+    {
+        throw new InvalidOperationException("找不到可用的本地 OAuth issuer 端口。");
+    }
+
+    oauthPort++;
+}
+
+if (oauthPort != configuredOAuthPort)
+{
+    PersistOAuthPort(oauthPort);
+}
+
 var listenUrl = $"http://{(localBindIp.Contains(':') ? $"[{localBindIp}]" : localBindIp)}:{listenPort}";
-builder.WebHost.UseUrls(listenUrl);
+var oauthUrl = $"http://{(localBindIp.Contains(':') ? $"[{localBindIp}]" : localBindIp)}:{oauthPort}";
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Listen(IPAddress.Parse(localBindIp), listenPort);
+    if (oauthPort != listenPort)
+    {
+        options.Listen(IPAddress.Parse(localBindIp), oauthPort);
+    }
+});
 builder.Services.AddHttpClient("gateway-upstream", client =>
 {
     client.Timeout = TimeSpan.FromMinutes(10);
@@ -55,6 +84,7 @@ builder.Services.AddHttpClient("gateway-upstream", client =>
 builder.Services.AddSingleton<ModelRegistry>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<ModelRegistry>());
 builder.Services.AddSingleton<EndpointForwarder>();
+builder.Services.AddSingleton<OAuthCompatibilityStore>();
 
 // 额外请求头
 var extraHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -75,6 +105,8 @@ var endpointMappings = gateway.GetSection("EndpointMappings")
 
 var app = builder.Build();
 app.UseWebSockets();
+var oauthStore = app.Services.GetRequiredService<OAuthCompatibilityStore>();
+OAuthEndpoints.Map(app, oauthStore, oauthUrl);
 
 // 健康检查 / 说明页
 app.MapGet("/", () => Results.Json(new
@@ -95,7 +127,8 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/v1")
-        && !HasGatewayApiKey(context.Request.Headers.Authorization, gatewayApiKey))
+        && !HasGatewayApiKey(context.Request.Headers.Authorization, gatewayApiKey)
+        && !HasOAuthAccessToken(context.Request.Headers.Authorization, oauthStore))
     {
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         await context.Response.WriteAsJsonAsync(new { error = new { message = "Gateway API Key 无效。", type = "authentication_error" } });
@@ -160,6 +193,7 @@ Console.WriteLine("========================================");
 Console.WriteLine("  LlmGateway - 本机 LLM 反向代理");
 Console.WriteLine($"  模式: {(args.Contains("--service", StringComparer.OrdinalIgnoreCase) ? "Windows 服务" : "控制台")}");
 Console.WriteLine($"  监听: {listenUrl}");
+Console.WriteLine($"  OAuth issuer: {oauthUrl}");
 Console.WriteLine($"  Endpoint: {string.Join(", ", app.Services.GetRequiredService<ModelRegistry>().Endpoints.Select(endpoint => endpoint.Name))}");
 Console.WriteLine($"  日志级别: {gatewayLogLevel}");
 Console.WriteLine($"  流量详情: {(logTraffic ? "开启" : "仅 Debug 级别记录")}");
@@ -221,10 +255,34 @@ static void PersistGatewayApiKey(string apiKey)
     File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
 }
 
+static void PersistOAuthPort(int port)
+{
+    var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+    if (!File.Exists(path))
+    {
+        return;
+    }
+
+    var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
+    if (root?["Gateway"] is not JsonObject gateway)
+    {
+        return;
+    }
+
+    gateway["OAuthPort"] = port;
+    File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + Environment.NewLine);
+}
+
 static bool HasGatewayApiKey(string? authorization, string expectedKey) =>
     AuthenticationHeaderValue.TryParse(authorization, out var value)
     && string.Equals(value.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase)
     && string.Equals(value.Parameter, expectedKey, StringComparison.Ordinal);
+
+static bool HasOAuthAccessToken(string? authorization, OAuthCompatibilityStore store) =>
+    AuthenticationHeaderValue.TryParse(authorization, out var value)
+    && string.Equals(value.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase)
+    && !string.IsNullOrWhiteSpace(value.Parameter)
+    && store.IsAccessTokenValid(value.Parameter);
 
 static class TrafficLogging
 {

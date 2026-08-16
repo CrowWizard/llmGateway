@@ -28,9 +28,18 @@ public sealed class GatewayHostService
             var upstreamBaseUrl = effective.UpstreamBaseUrl.TrimEnd('/') + "/";
             var listenUrl = $"http://{(effective.LocalBindIp.Contains(':') ? $"[{effective.LocalBindIp}]" : effective.LocalBindIp)}:{effective.ListenPort}";
             var builder = WebApplication.CreateSlimBuilder();
-            builder.WebHost.UseUrls(listenUrl);
+            var oauthUrl = $"http://{(effective.LocalBindIp.Contains(':') ? $"[{effective.LocalBindIp}]" : effective.LocalBindIp)}:{effective.OAuthPort}";
+            builder.WebHost.ConfigureKestrel(options =>
+            {
+                options.Listen(System.Net.IPAddress.Parse(effective.LocalBindIp), effective.ListenPort);
+                if (effective.OAuthPort != effective.ListenPort)
+                {
+                    options.Listen(System.Net.IPAddress.Parse(effective.LocalBindIp), effective.OAuthPort);
+                }
+            });
             builder.Logging.ClearProviders();
             builder.Services.AddHttpClient("responses-compatibility", client => client.Timeout = TimeSpan.FromMinutes(10));
+            builder.Services.AddSingleton<OAuthCompatibilityStore>();
 
             var routes = new[]
             {
@@ -73,6 +82,7 @@ public sealed class GatewayHostService
             });
 
             var app = builder.Build();
+            OAuthEndpoints.Map(app, app.Services.GetRequiredService<OAuthCompatibilityStore>(), oauthUrl);
             app.MapGet("/", () => Results.Json(new
             {
                 name = "LlmGateway",
@@ -153,6 +163,10 @@ public sealed class GatewayHostService
         if (settings.ListenPort is < 1 or > 65535)
         {
             throw new InvalidOperationException("监听端口必须在 1 到 65535 之间。");
+        }
+        if (settings.OAuthPort is < 1 or > 65535)
+        {
+            throw new InvalidOperationException("OAuth 监听端口必须在 1 到 65535 之间。");
         }
         if (string.IsNullOrWhiteSpace(settings.LocalBindIp))
         {

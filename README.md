@@ -14,6 +14,8 @@
 
 本程序在本机监听端口，汇总多个 OpenAI 兼容 Endpoint 的模型，并将请求转发到持有该模型的上游。每个 Endpoint 保留自己的原始 API Key；本地客户端只使用网关自动生成的 Gateway Key。网关每五分钟直连各 Endpoint 的 `/v1/models` 更新模型索引，请求优先发送给该模型最近成功的 Endpoint，首次及故障切换按配置顺序尝试。
 
+网关还可作为自定义 OAuth issuer：`Gateway.OAuthPort`（默认 `ListenPort + 1`）监听 `GET /oauth/authorize`、`POST /oauth/token` 和 `POST /oauth/revoke`，并提供 `/.well-known/openid-configuration`。授权码流程支持 S256 PKCE、refresh token 轮换与 token 撤销；issuer 访问地址为 `http://[LocalBindIp]:[OAuthPort]`。
+
 `Gateway:ResponsesMode` 用于映射文字模型：`Auto` 先原样调用上游 `/v1/responses`，仅在上游明确不支持端点时自动转换到 `/v1/chat/completions`；`Responses` 强制原样转发；`ChatCompletions` 强制协议转换。图像等其他 OpenAI 兼容路径会透明转发，并可通过 `Gateway:EndpointMappings` 配置路径前缀映射。
 
 ```
@@ -58,6 +60,7 @@ macOS 会将变量写入 `~/.codex/llm-gateway.env`，同时通过 `launchctl se
   "Gateway": {
     "LocalBindIp": "127.0.0.1",
     "ListenPort": 3001,
+    "OAuthPort": 3002,
     "ApiKey": "",
     "Endpoints": [
       {
@@ -81,6 +84,7 @@ macOS 会将变量写入 `~/.codex/llm-gateway.env`，同时通过 `launchctl se
 |--------|------|
 | `Gateway.LocalBindIp` | 本地绑定 IP；允许局域网访问可设为 `0.0.0.0` |
 | `Gateway.ListenPort` | 本地监听端口 |
+| `Gateway.OAuthPort` | 自定义 OAuth issuer 端口，提供 `/oauth/authorize`、`/oauth/token` 和 `/oauth/revoke` |
 | `Gateway.ApiKey` | 本地 Gateway Key；留空时 CLI 自动生成并写回配置，客户端必须使用它 |
 | `Gateway.Endpoints` | 上游列表；每项的 `ApiKey` 仅供网关访问原始上游，绝不应给本地客户端使用 |
 | `Gateway.Endpoints[].BaseUrl` | 上游 API 根地址，可填写根地址或以 `/v1` 结尾的地址 |
