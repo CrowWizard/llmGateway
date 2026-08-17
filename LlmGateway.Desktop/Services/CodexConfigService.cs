@@ -79,6 +79,7 @@ public sealed partial class CodexConfigService(AppPaths paths)
 
         var output = new StringBuilder();
         output.AppendLine($"model = \"{Escape(settings.Model)}\"");
+        output.AppendLine("model_provider = \"openai\"");
         output.AppendLine($"openai_base_url = \"{Escape(settings.BaseUrl)}\"");
         if (kept.Count > 0)
         {

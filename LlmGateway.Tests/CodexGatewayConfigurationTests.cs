@@ -28,9 +28,9 @@ public sealed class CodexGatewayConfigurationTests
         var transformed = CodexConfigService.Transform(existing, settings);
 
         Assert.Contains("model = \"gpt-test\"", transformed);
+        Assert.Contains("model_provider = \"openai\"", transformed);
         Assert.Contains("openai_base_url = \"http://127.0.0.1:23008/v1\"", transformed);
         Assert.Contains("[other]", transformed);
-        Assert.DoesNotContain("model_provider", transformed);
         Assert.DoesNotContain("model_providers.", transformed);
     }
 
