@@ -149,8 +149,14 @@ public static class OAuthEndpoints
             authorization_endpoint = issuer + "/oauth/authorize",
             token_endpoint = issuer + "/oauth/token",
             revocation_endpoint = issuer + "/oauth/revoke",
+            device_authorization_endpoint = issuer + "/deviceauth/usercode",
             response_types_supported = new[] { "code" },
-            grant_types_supported = new[] { "authorization_code", "refresh_token" },
+            grant_types_supported = new[]
+            {
+                "authorization_code",
+                "refresh_token",
+                "urn:ietf:params:oauth:grant-type:device_code"
+            },
             code_challenge_methods_supported = new[] { "S256" },
             token_endpoint_auth_methods_supported = new[] { "none", "client_secret_post" }
         }));
