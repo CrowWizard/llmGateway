@@ -101,6 +101,8 @@ public sealed class OAuthCompatibilityTests
         var token = store.Exchange(result.AuthorizationCode, "codex-client", redirectUri, result.CodeVerifier, null);
 
         Assert.True(store.IsAccessTokenValid(token.AccessToken));
+        Assert.NotNull(token.IdToken);
+        Assert.Equal(3, token.IdToken!.Split('.').Length);
     }
 
     private static string CreateChallenge(string verifier) =>

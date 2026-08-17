@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 public sealed record OAuthAuthorizationRequest(
     string ClientId,
@@ -221,7 +222,13 @@ public sealed class OAuthCompatibilityStore
             clientId ?? "local-client",
             normalizedScope,
             DateTimeOffset.UtcNow.AddDays(30));
-        return new OAuthTokenResult(accessToken, refreshToken, "Bearer", AccessTokenLifetimeSeconds, normalizedScope);
+        return new OAuthTokenResult(
+            accessToken,
+            refreshToken,
+            "Bearer",
+            AccessTokenLifetimeSeconds,
+            normalizedScope,
+            CreateLocalIdToken(clientId));
     }
 
     private static bool IsCodeVerifierValid(string? challenge, string? verifier)
@@ -249,6 +256,23 @@ public sealed class OAuthCompatibilityStore
         var digest = SHA256.HashData(Encoding.ASCII.GetBytes(verifier));
         return Convert.ToBase64String(digest).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
+
+    private static string CreateLocalIdToken(string? clientId)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var header = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(new { alg = "none", typ = "JWT" }));
+        var payload = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            sub = string.IsNullOrWhiteSpace(clientId) ? "local-client" : clientId,
+            iss = "llm-gateway",
+            iat = now,
+            exp = now + AccessTokenLifetimeSeconds
+        }));
+        return $"{header}.{payload}.";
+    }
+
+    private static string Base64UrlEncode(byte[] value) =>
+        Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     private static string CreateUserCode()
     {
