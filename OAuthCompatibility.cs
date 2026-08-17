@@ -28,6 +28,11 @@ public sealed record DeviceAuthorizationResult(
     int ExpiresIn,
     int Interval);
 
+public sealed record DeviceAuthorizationCodeResult(
+    string AuthorizationCode,
+    string CodeChallenge,
+    string CodeVerifier);
+
 public sealed class OAuthCompatibilityStore
 {
     private const int AuthorizationCodeLifetimeSeconds = 300;
@@ -101,11 +106,14 @@ public sealed class OAuthCompatibilityStore
 
         var deviceAuthId = CreateToken();
         var userCode = CreateUserCode();
+        var codeVerifier = CreateToken();
         _deviceAuthorizations[deviceAuthId] = new DeviceAuthorization(
             clientId,
             userCode,
             string.IsNullOrWhiteSpace(scope) ? "openid profile email" : scope.Trim(),
-            DateTimeOffset.UtcNow.AddSeconds(DeviceAuthorizationLifetimeSeconds));
+            DateTimeOffset.UtcNow.AddSeconds(DeviceAuthorizationLifetimeSeconds),
+            codeVerifier,
+            CreateCodeChallenge(codeVerifier));
         return new DeviceAuthorizationResult(
             deviceAuthId,
             userCode,
@@ -154,6 +162,40 @@ public sealed class OAuthCompatibilityStore
         return IssueTokens(authorization.Scope, authorization.ClientId);
     }
 
+    public DeviceAuthorizationCodeResult CompleteDeviceAuthorizationCode(string? deviceAuthId, string? userCode, string redirectUri)
+    {
+        if (string.IsNullOrWhiteSpace(deviceAuthId)
+            || !_deviceAuthorizations.TryGetValue(deviceAuthId, out var authorization)
+            || !string.Equals(authorization.UserCode, NormalizeUserCode(userCode), StringComparison.Ordinal))
+        {
+            throw new OAuthProtocolException("invalid_grant", "设备授权码无效。", 400);
+        }
+
+        if (authorization.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            _deviceAuthorizations.TryRemove(deviceAuthId, out _);
+            throw new OAuthProtocolException("expired_token", "设备授权已过期。", 400);
+        }
+
+        if (!authorization.IsApproved)
+        {
+            throw new OAuthProtocolException("authorization_pending", "等待用户完成授权。", 404);
+        }
+
+        if (!_deviceAuthorizations.TryRemove(deviceAuthId, out authorization))
+        {
+            throw new OAuthProtocolException("invalid_grant", "设备授权码已被使用。", 400);
+        }
+
+        var authorizationCode = CreateToken();
+        _codes[authorizationCode] = new AuthorizationCode(
+            authorization.ClientId,
+            redirectUri,
+            authorization.CodeChallenge,
+            DateTimeOffset.UtcNow.AddSeconds(AuthorizationCodeLifetimeSeconds));
+        return new DeviceAuthorizationCodeResult(authorizationCode, authorization.CodeChallenge, authorization.CodeVerifier);
+    }
+
     public bool Revoke(string? token)
     {
         if (string.IsNullOrWhiteSpace(token))
@@ -194,14 +236,19 @@ public sealed class OAuthCompatibilityStore
             return false;
         }
 
-        var digest = SHA256.HashData(Encoding.ASCII.GetBytes(verifier));
-        var calculated = Convert.ToBase64String(digest).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var calculated = CreateCodeChallenge(verifier);
         return CryptographicOperations.FixedTimeEquals(
             Encoding.ASCII.GetBytes(calculated),
             Encoding.ASCII.GetBytes(challenge));
     }
 
     private static string CreateToken() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+
+    private static string CreateCodeChallenge(string verifier)
+    {
+        var digest = SHA256.HashData(Encoding.ASCII.GetBytes(verifier));
+        return Convert.ToBase64String(digest).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
 
     private static string CreateUserCode()
     {
@@ -222,7 +269,14 @@ public sealed class OAuthCompatibilityStore
     private sealed record AuthorizationCode(string ClientId, string RedirectUri, string? CodeChallenge, DateTimeOffset ExpiresAt);
     private sealed record RefreshGrant(string ClientId, string Scope, DateTimeOffset ExpiresAt);
     private sealed record AccessGrant(DateTimeOffset ExpiresAt);
-    private sealed record DeviceAuthorization(string ClientId, string UserCode, string Scope, DateTimeOffset ExpiresAt, bool IsApproved = false);
+    private sealed record DeviceAuthorization(
+        string ClientId,
+        string UserCode,
+        string Scope,
+        DateTimeOffset ExpiresAt,
+        string CodeVerifier,
+        string CodeChallenge,
+        bool IsApproved = false);
 }
 
 public sealed class OAuthProtocolException(string error, string description, int statusCode) : Exception(description)

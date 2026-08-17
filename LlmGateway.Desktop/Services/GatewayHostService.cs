@@ -28,7 +28,7 @@ public sealed class GatewayHostService
             var upstreamBaseUrl = effective.UpstreamBaseUrl.TrimEnd('/') + "/";
             var listenUrl = $"http://{(effective.LocalBindIp.Contains(':') ? $"[{effective.LocalBindIp}]" : effective.LocalBindIp)}:{effective.ListenPort}";
             var builder = WebApplication.CreateSlimBuilder();
-            var oauthUrl = $"http://{(effective.LocalBindIp.Contains(':') ? $"[{effective.LocalBindIp}]" : effective.LocalBindIp)}:{effective.OAuthPort}";
+            var oauthUrl = OAuthEndpoints.CreateIssuerUrl(effective.LocalBindIp, effective.OAuthPort);
             builder.WebHost.ConfigureKestrel(options =>
             {
                 options.Listen(System.Net.IPAddress.Parse(effective.LocalBindIp), effective.ListenPort);

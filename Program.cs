@@ -68,7 +68,7 @@ if (oauthPort != configuredOAuthPort)
 }
 
 var listenUrl = $"http://{(localBindIp.Contains(':') ? $"[{localBindIp}]" : localBindIp)}:{listenPort}";
-var oauthUrl = $"http://{(localBindIp.Contains(':') ? $"[{localBindIp}]" : localBindIp)}:{oauthPort}";
+var oauthUrl = OAuthEndpoints.CreateIssuerUrl(localBindIp, oauthPort);
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.Listen(IPAddress.Parse(localBindIp), listenPort);

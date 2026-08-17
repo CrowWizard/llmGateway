@@ -4,14 +4,26 @@ using System.Text.Json;
 
 public static class OAuthEndpoints
 {
+    public static string CreateIssuerUrl(string localBindIp, int port)
+    {
+        var host = localBindIp.Trim() switch
+        {
+            "0.0.0.0" => "127.0.0.1",
+            "::" => "[::1]",
+            var value when value.Contains(':') => $"[{value}]",
+            var value => value
+        };
+        return $"http://{host}:{port}";
+    }
+
     public static void Map(WebApplication app, OAuthCompatibilityStore store, string issuer)
     {
-        app.MapPost("/deviceauth/usercode", async (HttpContext context) =>
+        var deviceUserCode = async Task<IResult> (HttpContext context) =>
         {
             var values = await ReadValuesAsync(context);
             try
             {
-                var verificationUri = issuer + "/deviceauth/verify";
+                var verificationUri = issuer + "/codex/device";
                 var result = store.StartDeviceAuthorization(
                     values.GetValueOrDefault("client_id"),
                     values.GetValueOrDefault("scope"),
@@ -25,16 +37,18 @@ public static class OAuthEndpoints
                     verification_uri = result.VerificationUri,
                     verification_uri_complete = verificationUriComplete,
                     expires_in = result.ExpiresIn,
-                    interval = result.Interval
+                    interval = result.Interval.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 });
             }
             catch (OAuthProtocolException exception)
             {
                 return Error(exception);
             }
-        });
+        };
+        app.MapPost("/deviceauth/usercode", deviceUserCode);
+        app.MapPost("/api/accounts/deviceauth/usercode", deviceUserCode);
 
-        app.MapPost("/deviceauth/token", async (HttpContext context) =>
+        var deviceToken = async Task<IResult> (HttpContext context) =>
         {
             var values = await ReadValuesAsync(context);
             try
@@ -47,9 +61,37 @@ public static class OAuthEndpoints
             {
                 return Error(exception);
             }
-        });
+        };
+        app.MapPost("/deviceauth/token", deviceToken);
 
-        app.MapGet("/deviceauth/verify", (HttpContext context) =>
+        var codexDeviceToken = async Task<IResult> (HttpContext context) =>
+        {
+            var values = await ReadValuesAsync(context);
+            try
+            {
+                var result = store.CompleteDeviceAuthorizationCode(
+                    values.GetValueOrDefault("device_auth_id"),
+                    values.GetValueOrDefault("user_code"),
+                    issuer + "/deviceauth/callback");
+                return Results.Json(new
+                {
+                    authorization_code = result.AuthorizationCode,
+                    code_challenge = result.CodeChallenge,
+                    code_verifier = result.CodeVerifier
+                });
+            }
+            catch (OAuthProtocolException exception) when (exception.Error == "authorization_pending")
+            {
+                return Results.StatusCode(StatusCodes.Status404NotFound);
+            }
+            catch (OAuthProtocolException exception)
+            {
+                return Error(exception);
+            }
+        };
+        app.MapPost("/api/accounts/deviceauth/token", codexDeviceToken);
+
+        var deviceVerificationPage = (HttpContext context) =>
         {
             var userCode = System.Net.WebUtility.HtmlEncode(context.Request.Query["user_code"].ToString());
             return Results.Content($"""
@@ -59,9 +101,11 @@ public static class OAuthEndpoints
                 <label>用户码 <input name="user_code" value="{userCode}" autocomplete="one-time-code" required></label>
                 <button type="submit">确认授权</button></form></main></body></html>
                 """, "text/html; charset=utf-8");
-        });
+            };
+            app.MapGet("/deviceauth/verify", deviceVerificationPage);
+            app.MapGet("/codex/device", deviceVerificationPage);
 
-        app.MapPost("/deviceauth/verify", async (HttpContext context) =>
+            var approveDeviceAuthorization = async Task<IResult> (HttpContext context) =>
         {
             var values = await ReadValuesAsync(context);
             try
@@ -73,7 +117,9 @@ public static class OAuthEndpoints
             {
                 return Error(exception);
             }
-        });
+        };
+        app.MapPost("/deviceauth/verify", approveDeviceAuthorization);
+        app.MapPost("/codex/device", approveDeviceAuthorization);
 
         app.MapGet("/oauth/authorize", (HttpContext context) =>
         {
@@ -143,7 +189,7 @@ public static class OAuthEndpoints
             return Results.StatusCode(StatusCodes.Status200OK);
         });
 
-        app.MapGet("/.well-known/openid-configuration", () => Results.Json(new
+        var discovery = () => Results.Json(new
         {
             issuer,
             authorization_endpoint = issuer + "/oauth/authorize",
@@ -159,7 +205,9 @@ public static class OAuthEndpoints
             },
             code_challenge_methods_supported = new[] { "S256" },
             token_endpoint_auth_methods_supported = new[] { "none", "client_secret_post" }
-        }));
+        });
+        app.MapGet("/.well-known/openid-configuration", discovery);
+        app.MapGet("/.well-known/oauth-authorization-server", discovery);
     }
 
     private static IResult Token(OAuthTokenResult result) => Results.Json(new
