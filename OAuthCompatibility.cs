@@ -268,7 +268,7 @@ public sealed class OAuthCompatibilityStore
             iat = now,
             exp = now + AccessTokenLifetimeSeconds
         }));
-        return $"{header}.{payload}.";
+        return $"{header}.{payload}.local-gateway-signature";
     }
 
     private static string Base64UrlEncode(byte[] value) =>

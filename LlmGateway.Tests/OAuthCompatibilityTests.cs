@@ -102,7 +102,9 @@ public sealed class OAuthCompatibilityTests
 
         Assert.True(store.IsAccessTokenValid(token.AccessToken));
         Assert.NotNull(token.IdToken);
-        Assert.Equal(3, token.IdToken!.Split('.').Length);
+        var idTokenParts = token.IdToken!.Split('.');
+        Assert.Equal(3, idTokenParts.Length);
+        Assert.All(idTokenParts, part => Assert.NotEmpty(part));
     }
 
     private static string CreateChallenge(string verifier) =>
