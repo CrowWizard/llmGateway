@@ -21,13 +21,23 @@ public sealed record OAuthTokenResult(
     string? IdToken = null,
     string? AccountId = null);
 
+public sealed record DeviceAuthorizationResult(
+    string DeviceAuthId,
+    string UserCode,
+    string VerificationUri,
+    int ExpiresIn,
+    int Interval);
+
 public sealed class OAuthCompatibilityStore
 {
     private const int AuthorizationCodeLifetimeSeconds = 300;
     private const int AccessTokenLifetimeSeconds = 3600;
+    private const int DeviceAuthorizationLifetimeSeconds = 900;
+    private const int DeviceAuthorizationPollingIntervalSeconds = 5;
     private readonly ConcurrentDictionary<string, AuthorizationCode> _codes = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, RefreshGrant> _refreshTokens = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, AccessGrant> _accessTokens = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, DeviceAuthorization> _deviceAuthorizations = new(StringComparer.Ordinal);
 
     public OAuthAuthorizationResult Authorize(OAuthAuthorizationRequest request)
     {
@@ -82,6 +92,68 @@ public sealed class OAuthCompatibilityStore
         return IssueTokens(scope ?? grant.Scope, grant.ClientId);
     }
 
+    public DeviceAuthorizationResult StartDeviceAuthorization(string? clientId, string? scope, string verificationUri)
+    {
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            throw new OAuthProtocolException("invalid_request", "client_id 是必需的。", 400);
+        }
+
+        var deviceAuthId = CreateToken();
+        var userCode = CreateUserCode();
+        _deviceAuthorizations[deviceAuthId] = new DeviceAuthorization(
+            clientId,
+            userCode,
+            string.IsNullOrWhiteSpace(scope) ? "openid profile email" : scope.Trim(),
+            DateTimeOffset.UtcNow.AddSeconds(DeviceAuthorizationLifetimeSeconds));
+        return new DeviceAuthorizationResult(
+            deviceAuthId,
+            userCode,
+            verificationUri,
+            DeviceAuthorizationLifetimeSeconds,
+            DeviceAuthorizationPollingIntervalSeconds);
+    }
+
+    public void ApproveDeviceAuthorization(string? userCode)
+    {
+        var normalizedUserCode = NormalizeUserCode(userCode);
+        var authorization = _deviceAuthorizations.FirstOrDefault(pair =>
+            string.Equals(pair.Value.UserCode, normalizedUserCode, StringComparison.Ordinal));
+        if (string.IsNullOrEmpty(authorization.Key) || authorization.Value.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            throw new OAuthProtocolException("invalid_user_code", "用户码无效或已过期。", 400);
+        }
+
+        _deviceAuthorizations.TryUpdate(authorization.Key, authorization.Value with { IsApproved = true }, authorization.Value);
+    }
+
+    public OAuthTokenResult CompleteDeviceAuthorization(string? deviceAuthId)
+    {
+        if (string.IsNullOrWhiteSpace(deviceAuthId)
+            || !_deviceAuthorizations.TryGetValue(deviceAuthId, out var authorization))
+        {
+            throw new OAuthProtocolException("invalid_grant", "设备授权码无效。", 400);
+        }
+
+        if (authorization.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            _deviceAuthorizations.TryRemove(deviceAuthId, out _);
+            throw new OAuthProtocolException("expired_token", "设备授权已过期。", 400);
+        }
+
+        if (!authorization.IsApproved)
+        {
+            throw new OAuthProtocolException("authorization_pending", "等待用户完成授权。", 400);
+        }
+
+        if (!_deviceAuthorizations.TryRemove(deviceAuthId, out authorization))
+        {
+            throw new OAuthProtocolException("invalid_grant", "设备授权码已被使用。", 400);
+        }
+
+        return IssueTokens(authorization.Scope, authorization.ClientId);
+    }
+
     public bool Revoke(string? token)
     {
         if (string.IsNullOrWhiteSpace(token))
@@ -131,9 +203,26 @@ public sealed class OAuthCompatibilityStore
 
     private static string CreateToken() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
 
+    private static string CreateUserCode()
+    {
+        const string alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        var bytes = RandomNumberGenerator.GetBytes(8);
+        var code = new char[8];
+        for (var index = 0; index < code.Length; index++)
+        {
+            code[index] = alphabet[bytes[index] % alphabet.Length];
+        }
+
+        return string.Concat(code.AsSpan(0, 4), "-", code.AsSpan(4, 4));
+    }
+
+    private static string NormalizeUserCode(string? userCode) =>
+        (userCode ?? string.Empty).Trim().ToUpperInvariant().Replace(" ", string.Empty, StringComparison.Ordinal);
+
     private sealed record AuthorizationCode(string ClientId, string RedirectUri, string? CodeChallenge, DateTimeOffset ExpiresAt);
     private sealed record RefreshGrant(string ClientId, string Scope, DateTimeOffset ExpiresAt);
     private sealed record AccessGrant(DateTimeOffset ExpiresAt);
+    private sealed record DeviceAuthorization(string ClientId, string UserCode, string Scope, DateTimeOffset ExpiresAt, bool IsApproved = false);
 }
 
 public sealed class OAuthProtocolException(string error, string description, int statusCode) : Exception(description)

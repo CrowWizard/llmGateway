@@ -16,6 +16,14 @@
 
 网关还可作为自定义 OAuth issuer：`Gateway.OAuthPort`（默认 `ListenPort + 1`）监听 `GET /oauth/authorize`、`POST /oauth/token` 和 `POST /oauth/revoke`，并提供 `/.well-known/openid-configuration`。授权码流程支持 S256 PKCE、refresh token 轮换与 token 撤销；issuer 访问地址为 `http://[LocalBindIp]:[OAuthPort]`。
 
+同时兼容 Codex 的设备授权登录：`POST /deviceauth/usercode` 会返回设备码、用户码和本地确认地址，`POST /deviceauth/token` 支持轮询并在确认前返回 `authorization_pending`。例如在 Codex 所在环境执行：
+
+```powershell
+codex login --device-auth --experimental_issuer "http://127.0.0.1:23002"
+```
+
+如果 CLI 没有自动打开确认地址，可在浏览器打开 issuer 返回的 `verification_uri`，输入 `user_code` 并确认授权；随后 CLI 会继续轮询并取得本地访问令牌。设备授权码有效期为 15 分钟，建议客户端遵守返回的 `interval`（当前为 5 秒）。
+
 `Gateway:ResponsesMode` 用于映射文字模型：`Auto` 先原样调用上游 `/v1/responses`，仅在上游明确不支持端点时自动转换到 `/v1/chat/completions`；`Responses` 强制原样转发；`ChatCompletions` 强制协议转换。图像等其他 OpenAI 兼容路径会透明转发，并可通过 `Gateway:EndpointMappings` 配置路径前缀映射。
 
 ```
@@ -84,7 +92,7 @@ macOS 会将变量写入 `~/.codex/llm-gateway.env`，同时通过 `launchctl se
 |--------|------|
 | `Gateway.LocalBindIp` | 本地绑定 IP；允许局域网访问可设为 `0.0.0.0` |
 | `Gateway.ListenPort` | 本地监听端口 |
-| `Gateway.OAuthPort` | 自定义 OAuth issuer 端口，提供 `/oauth/authorize`、`/oauth/token` 和 `/oauth/revoke` |
+| `Gateway.OAuthPort` | 自定义 OAuth issuer 端口，提供浏览器 OAuth、Codex `/deviceauth/usercode`、`/deviceauth/token` 和本地确认页 |
 | `Gateway.ApiKey` | 本地 Gateway Key；留空时 CLI 自动生成并写回配置，客户端必须使用它 |
 | `Gateway.Endpoints` | 上游列表；每项的 `ApiKey` 仅供网关访问原始上游，绝不应给本地客户端使用 |
 | `Gateway.Endpoints[].BaseUrl` | 上游 API 根地址，可填写根地址或以 `/v1` 结尾的地址 |

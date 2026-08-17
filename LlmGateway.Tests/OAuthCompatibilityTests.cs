@@ -60,6 +60,22 @@ public sealed class OAuthCompatibilityTests
         Assert.Throws<OAuthProtocolException>(() => store.Refresh(initial.RefreshToken, "codex-client", null));
     }
 
+    [Fact]
+    public void DeviceAuthorizationWaitsForApprovalThenIssuesTokensOnce()
+    {
+        var store = new OAuthCompatibilityStore();
+        var device = store.StartDeviceAuthorization("codex-client", "openid", "http://127.0.0.1:23002/deviceauth/verify");
+
+        var pending = Assert.Throws<OAuthProtocolException>(() => store.CompleteDeviceAuthorization(device.DeviceAuthId));
+        Assert.Equal("authorization_pending", pending.Error);
+
+        store.ApproveDeviceAuthorization(device.UserCode);
+        var token = store.CompleteDeviceAuthorization(device.DeviceAuthId);
+
+        Assert.True(store.IsAccessTokenValid(token.AccessToken));
+        Assert.Throws<OAuthProtocolException>(() => store.CompleteDeviceAuthorization(device.DeviceAuthId));
+    }
+
     private static string CreateChallenge(string verifier) =>
         Convert.ToBase64String(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)))
             .TrimEnd('=')
