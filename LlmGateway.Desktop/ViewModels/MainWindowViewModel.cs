@@ -378,7 +378,11 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 Models.Add(item);
             }
-            Model = models.Contains(previous, StringComparer.Ordinal) ? previous : models[0];
+            Model = models.Contains(previous, StringComparer.Ordinal)
+                ? previous
+                : models.Contains("gpt-5.6-sol", StringComparer.Ordinal)
+                    ? "gpt-5.6-sol"
+                    : models[^1];
             CodexStatus = $"令牌验证通过，已获取 {models.Count} 个模型。";
         }
         catch (Exception exception)
