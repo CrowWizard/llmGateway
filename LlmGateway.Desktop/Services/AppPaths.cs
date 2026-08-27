@@ -2,7 +2,7 @@ namespace LlmGateway.Desktop.Services;
 
 public sealed class AppPaths
 {
-    public AppPaths(string? userHome = null, string? applicationDirectory = null)
+    public AppPaths(string? userHome = null, string? applicationDirectory = null, string? codexHome = null)
     {
         UserHome = userHome ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (string.IsNullOrWhiteSpace(UserHome))
@@ -11,11 +11,12 @@ public sealed class AppPaths
         }
 
         ApplicationDirectory = applicationDirectory ?? AppContext.BaseDirectory;
+        CodexDirectory = ResolveCodexDirectory(UserHome, codexHome);
     }
 
     public string UserHome { get; }
     public string ApplicationDirectory { get; }
-    public string CodexDirectory => Path.Combine(UserHome, ".codex");
+    public string CodexDirectory { get; }
     public string CodexConfigPath => Path.Combine(CodexDirectory, "config.toml");
     public string CodexAuthPath => Path.Combine(CodexDirectory, "auth.json");
     public string CodexStateDatabasePath => Path.Combine(CodexDirectory, "state_5.sqlite");
@@ -34,4 +35,21 @@ public sealed class AppPaths
     public string MacOsLaunchAgentsDirectory => Path.Combine(UserHome, "Library", "LaunchAgents");
     public string MacOsEnvironmentLaunchAgentPath(string name) =>
         Path.Combine(MacOsLaunchAgentsDirectory, $"com.llmgateway.environment.{name}.plist");
+
+    public static string ResolveCodexDirectory(string? userHome = null, string? codexHome = null)
+    {
+        var configuredDirectory = codexHome ?? Environment.GetEnvironmentVariable("CODEX_HOME");
+        if (!string.IsNullOrWhiteSpace(configuredDirectory))
+        {
+            return configuredDirectory;
+        }
+
+        var resolvedUserHome = userHome ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrWhiteSpace(resolvedUserHome))
+        {
+            throw new InvalidOperationException("无法确定用户主目录。");
+        }
+
+        return Path.Combine(resolvedUserHome, ".codex");
+    }
 }

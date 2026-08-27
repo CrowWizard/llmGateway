@@ -21,6 +21,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly ModelService _modelService;
     private readonly ApplicationLauncher _launcher;
     private readonly CodexLocalizationService _localizationService;
+    private readonly CodexRuntimeLocalizationService _runtimeLocalizationService;
     private readonly NodeRuntimeService _nodeRuntimeService;
     private readonly ErrorLogService _errorLogService;
     private readonly AsyncCommand _startGatewayCommand;
@@ -63,6 +64,7 @@ public sealed class MainWindowViewModel : ObservableObject
         ModelService modelService,
         ApplicationLauncher launcher,
         CodexLocalizationService localizationService,
+        CodexRuntimeLocalizationService runtimeLocalizationService,
         NodeRuntimeService nodeRuntimeService,
         ErrorLogService errorLogService)
     {
@@ -79,6 +81,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _modelService = modelService;
         _launcher = launcher;
         _localizationService = localizationService;
+        _runtimeLocalizationService = runtimeLocalizationService;
         _nodeRuntimeService = nodeRuntimeService;
         _errorLogService = errorLogService;
 
@@ -569,10 +572,9 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         try
         {
-            CodexStatus = "正在关闭 Codex 并写入中文语言偏好…";
+            CodexStatus = "正在使用运行时注入启动 Codex 中文界面…";
             await _launcher.CloseManagedClientsAsync();
-            var result = await _localizationService.EnableChineseAsync();
-            CodexStatus = $"{result.Message} Preferences：{result.PreferencesPath}";
+            CodexStatus = await _runtimeLocalizationService.LaunchChineseAsync();
         }
         catch (Exception exception)
         {

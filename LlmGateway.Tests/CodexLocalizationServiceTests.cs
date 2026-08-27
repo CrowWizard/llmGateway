@@ -1,4 +1,5 @@
 using LlmGateway.Desktop.Services;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace LlmGateway.Tests;
@@ -24,9 +25,11 @@ public sealed class CodexLocalizationServiceTests : IDisposable
 
         Assert.Equal(preferencesPath, result.PreferencesPath);
         Assert.Equal(localStatePath, result.LocalStatePath);
-        Assert.Contains("\"selected_languages\": \"zh-CN,zh,en-US,en\"", await File.ReadAllTextAsync(preferencesPath, cancellationToken));
-        Assert.Contains("\"accept_languages\": \"zh-CN,zh,en-US,en\"", await File.ReadAllTextAsync(preferencesPath, cancellationToken));
-        Assert.Contains("\"app_locale\": \"zh-CN\"", await File.ReadAllTextAsync(localStatePath, cancellationToken));
+        var preferences = JsonNode.Parse(await File.ReadAllTextAsync(preferencesPath, cancellationToken))!.AsObject();
+        Assert.Equal("zh-CN,zh,en-US,en", preferences["intl"]!["selected_languages"]!.GetValue<string>());
+        Assert.Equal("zh-CN,zh,en-US,en", preferences["accept_languages"]!.GetValue<string>());
+        var localState = JsonNode.Parse(await File.ReadAllTextAsync(localStatePath, cancellationToken))!.AsObject();
+        Assert.Equal("zh-CN", localState["intl"]!["app_locale"]!.GetValue<string>());
         var config = await File.ReadAllTextAsync(Path.Combine(codexDirectory, "config.toml"), cancellationToken);
         Assert.Contains("developer_instructions = \"请始终使用简体中文进行交流和输出。\"", config);
         Assert.DoesNotContain("developer_instructions = \"English\"", config);

@@ -18,6 +18,7 @@ public sealed partial class App : Application
             var paths = new AppPaths();
             var gatewayHost = new GatewayHostService();
             var errorLogService = new ErrorLogService(paths);
+            var launcher = new ApplicationLauncher();
             var viewModel = new MainWindowViewModel(
                 paths,
                 new GatewaySettingsService(paths),
@@ -30,8 +31,9 @@ public sealed partial class App : Application
                 new EcommerceImageStudioSkillService(paths),
                 new CodexSkillService(paths),
                 new ModelService(),
-                new ApplicationLauncher(),
-                new CodexLocalizationService(),
+                launcher,
+                new CodexLocalizationService(codexDirectory: paths.CodexDirectory),
+                new CodexRuntimeLocalizationService(launcher),
                 new NodeRuntimeService(paths, errorLogService: errorLogService),
                 errorLogService);
 

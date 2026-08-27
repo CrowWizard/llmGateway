@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Win32;
 using LlmGateway.Desktop.Models;
@@ -35,6 +36,35 @@ public sealed class ApplicationLauncher
     public void LaunchChatGpt(string workingDirectory)
     {
         Launch(DetectChatGpt(), workingDirectory);
+    }
+
+    [SupportedOSPlatform("windows")]
+    public int LaunchChatGpt(string workingDirectory, string arguments)
+    {
+        var detection = DetectChatGpt();
+        if (!detection.Found)
+        {
+            throw new InvalidOperationException(detection.Description);
+        }
+
+        if (!string.IsNullOrWhiteSpace(detection.AppUserModelId))
+        {
+            return LaunchStoreApp(detection.AppUserModelId, arguments);
+        }
+
+        if (string.IsNullOrWhiteSpace(detection.Command))
+        {
+            throw new InvalidOperationException($"{detection.Name} 缺少可启动命令。");
+        }
+
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = detection.Command,
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false
+        });
+        return process?.Id ?? throw new InvalidOperationException("Codex Desktop 启动失败。");
     }
 
     public void OpenUrl(string url)
@@ -83,6 +113,7 @@ public sealed class ApplicationLauncher
                 if (!process.HasExited)
                 {
                     process.Kill(true);
+                    process.WaitForExit();
                 }
             }
             catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
@@ -136,6 +167,44 @@ public sealed class ApplicationLauncher
             WorkingDirectory = workingDirectory,
             UseShellExecute = true
         });
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static int LaunchStoreApp(string appUserModelId, string arguments)
+    {
+        var manager = (IApplicationActivationManager)new ApplicationActivationManager();
+        var result = manager.ActivateApplication(appUserModelId, arguments, ActivateOptions.NoErrorUi, out var processId);
+        if (result < 0)
+        {
+            Marshal.ThrowExceptionForHR(result);
+        }
+
+        return unchecked((int)processId);
+    }
+
+    [Flags]
+    private enum ActivateOptions
+    {
+        NoErrorUi = 0x00000002
+    }
+
+    [ComImport]
+    [Guid("2e941141-7f97-4756-ba1d-9decde894a3d")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IApplicationActivationManager
+    {
+        [PreserveSig]
+        int ActivateApplication(
+            [MarshalAs(UnmanagedType.LPWStr)] string appUserModelId,
+            [MarshalAs(UnmanagedType.LPWStr)] string arguments,
+            ActivateOptions options,
+            out uint processId);
+    }
+
+    [ComImport]
+    [Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")]
+    private class ApplicationActivationManager
+    {
     }
 
     [SupportedOSPlatform("windows")]

@@ -11,7 +11,7 @@ public sealed class CodexLocalizationService(string? applicationDataDirectory = 
     private readonly string _applicationDataDirectory = applicationDataDirectory
         ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
     private readonly string _codexDirectory = codexDirectory
-        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
+        ?? AppPaths.ResolveCodexDirectory();
 
     public string PreferencesPath => Path.Combine(_applicationDataDirectory, "Codex", "web", "Codex", "Default", "Preferences");
     public string LocalStatePath => Path.Combine(_applicationDataDirectory, "Codex", "web", "Codex", "Local State");

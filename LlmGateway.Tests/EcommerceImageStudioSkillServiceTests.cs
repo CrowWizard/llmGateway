@@ -8,6 +8,21 @@ public sealed class EcommerceImageStudioSkillServiceTests : IDisposable
     private readonly string _temporaryDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
     [Fact]
+    public void AppPaths_UsesProvidedCodexHome()
+    {
+        var codexHome = Path.Combine(_temporaryDirectory, "codex-home");
+
+        var paths = new AppPaths(
+            Path.Combine(_temporaryDirectory, "home"),
+            Path.Combine(_temporaryDirectory, "app"),
+            codexHome);
+
+        Assert.Equal(codexHome, paths.CodexDirectory);
+        Assert.Equal(Path.Combine(codexHome, "skills"), paths.CodexSkillsDirectory);
+        Assert.Equal(Path.Combine(codexHome, "config.toml"), paths.CodexConfigPath);
+    }
+
+    [Fact]
     public async Task InstallAsync_InstallsAsCodexSkill()
     {
         var paths = new AppPaths(
